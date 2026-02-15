@@ -2,12 +2,15 @@ package cli
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/mgrossma09/hue-cli/internal/config"
 	"github.com/mgrossma09/hue-cli/internal/hue"
@@ -71,10 +74,7 @@ func (a App) runLights(ctx context.Context, client lightService, args []string) 
 
 	switch args[0] {
 	case "list":
-		if len(args) != 1 {
-			return fmt.Errorf("%w: lights list does not take arguments", ErrUsage)
-		}
-		return runLightsList(ctx, a.Stdout, client)
+		return runLightsList(ctx, a.Stdout, client, args[1:])
 	case "toggle":
 		return runLightsToggle(ctx, a.Stdout, client, args[1:])
 	case "set":
@@ -84,20 +84,78 @@ func (a App) runLights(ctx context.Context, client lightService, args []string) 
 	}
 }
 
-func runLightsList(ctx context.Context, stdout io.Writer, client lightService) error {
+func runLightsList(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
+	fs := flag.NewFlagSet("lights list", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	jsonOut := fs.Bool("json", false, "Output as JSON")
+	csvOut := fs.Bool("csv", false, "Output as CSV")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printLightsListUsage(stdout)
+			return nil
+		}
+		return fmt.Errorf("%w: %v", ErrUsage, err)
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("%w: lights list does not take positional arguments", ErrUsage)
+	}
+	if *jsonOut && *csvOut {
+		return fmt.Errorf("%w: --json and --csv are mutually exclusive", ErrUsage)
+	}
+
 	lights, err := client.ListLights(ctx)
 	if err != nil {
 		return err
 	}
+
+	if *jsonOut {
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(lights)
+	}
+	if *csvOut {
+		writer := csv.NewWriter(stdout)
+		if err := writer.Write([]string{"id", "name", "on"}); err != nil {
+			return fmt.Errorf("write csv header: %w", err)
+		}
+		for _, light := range lights {
+			row := []string{light.ID, light.Name, strconv.FormatBool(light.On)}
+			if err := writer.Write(row); err != nil {
+				return fmt.Errorf("write csv row: %w", err)
+			}
+		}
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			return fmt.Errorf("flush csv: %w", err)
+		}
+		return nil
+	}
+
 	if len(lights) == 0 {
 		fmt.Fprintln(stdout, "no lights found")
 		return nil
 	}
 
+	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "ID\tNAME\tON")
 	for _, light := range lights {
-		fmt.Fprintf(stdout, "%s\t%s\t%t\n", light.ID, light.Name, light.On)
+		fmt.Fprintf(tw, "%s\t%s\t%t\n", light.ID, light.Name, light.On)
 	}
+	if err := tw.Flush(); err != nil {
+		return fmt.Errorf("flush table output: %w", err)
+	}
+
 	return nil
+}
+
+func printLightsListUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  huectl lights list [--json|--csv]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  --json  Output lights as JSON")
+	fmt.Fprintln(w, "  --csv   Output lights as CSV")
 }
 
 func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
