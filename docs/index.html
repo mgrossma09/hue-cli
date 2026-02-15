@@ -65,11 +65,11 @@
         </div>
       </section>
 
-      <section class="section alt" id="screenshots">
+      <section class="section alt" id="examples">
         <div class="container">
-          <h2>Screenshots</h2>
-          <p class="muted">Terminal-style previews of common commands.</p>
-          <div class="grid screenshots-grid">
+          <h2>Examples</h2>
+          <p class="muted">Terminal-style command examples.</p>
+          <div class="grid code-grid">
             <article class="terminal-card">
               <h3>lights list --csv</h3>
               <pre><code>$ huectl lights list --csv
@@ -95,7 +95,7 @@ id,name,group,group_type,on,reachable,bri,color
       <section class="section" id="install">
         <div class="container">
           <h2>Install</h2>
-          <div class="install-grid">
+          <div class="grid code-grid">
             <article class="card">
               <h3>Homebrew</h3>
               <pre><code>brew tap mgrossma09/tap
@@ -119,11 +119,13 @@ bash install.sh</code></pre>
       <section class="section alt" id="quickstart">
         <div class="container">
           <h2>Quickstart</h2>
-          <pre><code>export HUE_BRIDGE_HOST=192.168.1.2
+          <div class="grid code-grid">
+            <pre><code>export HUE_BRIDGE_HOST=192.168.1.2
 export HUE_API_TOKEN=your-hue-token
 
 huectl lights list --csv
 huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
+          </div>
         </div>
       </section>
     </main>
