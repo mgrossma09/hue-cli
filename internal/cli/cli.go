@@ -260,6 +260,10 @@ func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService,
 
 	id := fs.String("id", "", "Hue light ID")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printLightsToggleUsage(stdout)
+			return nil
+		}
 		return fmt.Errorf("%w: %v", ErrUsage, err)
 	}
 	if fs.NArg() != 0 {
@@ -274,6 +278,11 @@ func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService,
 	}
 	fmt.Fprintf(stdout, "toggled light %s\n", *id)
 	return nil
+}
+
+func printLightsToggleUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
 }
 
 func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, args []string) error {

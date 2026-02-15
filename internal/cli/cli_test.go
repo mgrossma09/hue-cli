@@ -405,6 +405,36 @@ func TestRunLightsToggle(t *testing.T) {
 	}
 }
 
+func TestRunLightsToggleHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "--help"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, "huectl lights toggle --id <id>") {
+		t.Fatalf("stdout missing toggle usage, got %q", got)
+	}
+}
+
+func TestRunLightsToggleHelpShort(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "-h"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, "Usage:") {
+		t.Fatalf("stdout missing usage, got %q", got)
+	}
+}
+
 func TestRunLightsSet(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
