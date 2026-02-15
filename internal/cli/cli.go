@@ -210,7 +210,8 @@ func parseXY(raw string) (*hue.XY, error) {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "huectl")
+	fmt.Fprintln(w, "huectl - control Philips Hue lights via Hue API v2")
+	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  huectl lights list")
 	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
