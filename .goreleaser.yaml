@@ -1,0 +1,48 @@
+version: 2
+
+project_name: huectl
+
+builds:
+  - id: huectl
+    main: ./cmd/huectl
+    binary: huectl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: release-archives
+    ids:
+      - huectl
+    formats:
+      - tar.gz
+    name_template: "huectl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: mgrossma09
+    name: hue-cli
+
+brews:
+  - name: huectl
+    directory: Formula
+    repository:
+      owner: mgrossma09
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/mgrossma09/hue-cli
+    description: CLI for controlling Philips Hue lights via Hue API v2
+    install: |
+      bin.install "huectl"
