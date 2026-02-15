@@ -102,7 +102,7 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 		switch r.URL.Path {
 		case "/clip/v2/resource/light":
 			_, _ = io.WriteString(w, `{"data":[
-				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":65.2},"status":"connected"},
+				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":65.2},"status":"connected","color":{"gamut":{}}},
 				{"id":"light-2","owner":{"rid":"device-2","rtype":"device"},"metadata":{"name":"Lamp"},"on":{"on":false},"status":"disconnected"},
 				{"id":"light-3","metadata":{"name":"Porch"},"on":{"on":true}}
 			]}`)
@@ -153,6 +153,9 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 	if light1.Bri == nil || *light1.Bri != 65.2 {
 		t.Fatalf("light-1 bri = %#v, want 65.2", light1.Bri)
 	}
+	if light1.Color != "yes" {
+		t.Fatalf("light-1 color = %q, want yes", light1.Color)
+	}
 
 	light2 := byID["light-2"]
 	if light2.Group != "Upstairs" || light2.GroupType != "zone" {
@@ -164,6 +167,9 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 	if light2.Bri != nil {
 		t.Fatalf("light-2 bri = %#v, want nil", light2.Bri)
 	}
+	if light2.Color != "unknown" {
+		t.Fatalf("light-2 color = %q, want unknown", light2.Color)
+	}
 
 	light3 := byID["light-3"]
 	if light3.Group != "Office" || light3.GroupType != "room" {
@@ -171,6 +177,9 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 	}
 	if light3.Reachable != nil {
 		t.Fatalf("light-3 reachable = %#v, want nil", light3.Reachable)
+	}
+	if light3.Color != "unknown" {
+		t.Fatalf("light-3 color = %q, want unknown", light3.Color)
 	}
 }
 
@@ -217,13 +226,15 @@ func TestListLightsWithOptions_ReachableFromZigbeeConnectivity(t *testing.T) {
 		switch r.URL.Path {
 		case "/clip/v2/resource/light":
 			_, _ = io.WriteString(w, `{"data":[
-				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":40.0}},
-				{"id":"light-2","owner":{"rid":"device-2","rtype":"device"},"metadata":{"name":"Lamp"},"on":{"on":false}}
+				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":40.0},"color":{"gamut":{}}},
+				{"id":"light-2","owner":{"rid":"device-2","rtype":"device"},"metadata":{"name":"Lamp"},"on":{"on":false}},
+				{"id":"light-3","owner":{"rid":"device-3","rtype":"device"},"metadata":{"name":"Ceiling"},"on":{"on":true}}
 			]}`)
 		case "/clip/v2/resource/zigbee_connectivity":
 			_, _ = io.WriteString(w, `{"data":[
 				{"owner":{"rid":"device-1","rtype":"device"},"status":"connected"},
-				{"owner":{"rid":"device-2","rtype":"device"},"status":"disconnected"}
+				{"owner":{"rid":"device-2","rtype":"device"},"status":"disconnected"},
+				{"owner":{"rid":"device-3","rtype":"device"},"status":"connected"}
 			]}`)
 		case "/clip/v2/resource/grouped_light":
 			_, _ = io.WriteString(w, `{"data":[]}`)
@@ -242,8 +253,8 @@ func TestListLightsWithOptions_ReachableFromZigbeeConnectivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListLightsWithOptions() error = %v", err)
 	}
-	if len(lights) != 2 {
-		t.Fatalf("len(lights) = %d, want 2", len(lights))
+	if len(lights) != 3 {
+		t.Fatalf("len(lights) = %d, want 3", len(lights))
 	}
 	byID := map[string]Light{}
 	for _, light := range lights {
@@ -254,9 +265,22 @@ func TestListLightsWithOptions_ReachableFromZigbeeConnectivity(t *testing.T) {
 	if light1.Reachable == nil || !*light1.Reachable {
 		t.Fatalf("light-1 reachable = %#v, want true", light1.Reachable)
 	}
+	if light1.Color != "yes" {
+		t.Fatalf("light-1 color = %q, want yes", light1.Color)
+	}
 	light2 := byID["light-2"]
 	if light2.Reachable == nil || *light2.Reachable {
 		t.Fatalf("light-2 reachable = %#v, want false", light2.Reachable)
+	}
+	if light2.Color != "unknown" {
+		t.Fatalf("light-2 color = %q, want unknown", light2.Color)
+	}
+	light3 := byID["light-3"]
+	if light3.Reachable == nil || !*light3.Reachable {
+		t.Fatalf("light-3 reachable = %#v, want true", light3.Reachable)
+	}
+	if light3.Color != "no" {
+		t.Fatalf("light-3 color = %q, want no", light3.Color)
 	}
 }
 

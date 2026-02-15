@@ -40,6 +40,7 @@ type Light struct {
 	On        bool     `json:"on"`
 	Reachable *bool    `json:"reachable,omitempty"`
 	Bri       *float64 `json:"bri,omitempty"`
+	Color     string   `json:"color,omitempty"`
 }
 
 type UpdateLightRequest struct {
@@ -102,6 +103,9 @@ type lightResource struct {
 	Dimming *struct {
 		Brightness float64 `json:"brightness"`
 	} `json:"dimming,omitempty"`
+	Color *struct {
+		Gamut any `json:"gamut,omitempty"`
+	} `json:"color,omitempty"`
 	Status string `json:"status,omitempty"`
 }
 
@@ -211,6 +215,7 @@ func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptio
 				reachable := strings.EqualFold(item.Status, "connected")
 				light.Reachable = &reachable
 			}
+			light.Color = resolveColorSupport(item, light.Reachable)
 		}
 		if opts.WithGroup {
 			if group, ok := lightToGroup[item.ID]; ok {
@@ -221,6 +226,19 @@ func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptio
 		lights = append(lights, light)
 	}
 	return lights, nil
+}
+
+func resolveColorSupport(item lightResource, reachable *bool) string {
+	if reachable != nil && !*reachable {
+		return "unknown"
+	}
+	if item.Color != nil {
+		return "yes"
+	}
+	if reachable != nil && *reachable {
+		return "no"
+	}
+	return "unknown"
 }
 
 func (c *Client) ToggleLight(ctx context.Context, id string) error {

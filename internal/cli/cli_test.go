@@ -93,19 +93,24 @@ func TestRunLightsList(t *testing.T) {
 func TestRunLightsListJSON(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true}}}
+	reachable := true
+	bri := 51.0
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true, Reachable: &reachable, Bri: &bri, Color: "yes"}}}
 	app := newTestApp(t, svc, stdout, stderr)
 
-	err := app.Run(context.Background(), []string{"lights", "list", "--json"})
+	err := app.Run(context.Background(), []string{"lights", "list", "--json", "--with-state"})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	var got []hue.Light
+	var got []map[string]any
 	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "abc" || got[0].Name != "Desk" || !got[0].On {
+	if len(got) != 1 || got[0]["id"] != "abc" || got[0]["name"] != "Desk" || got[0]["on"] != true {
 		t.Fatalf("unexpected json output: %+v", got)
+	}
+	if got[0]["color"] != "yes" {
+		t.Fatalf("unexpected color value: %+v", got[0]["color"])
 	}
 }
 
@@ -172,7 +177,7 @@ func TestRunLightsListCSVWithState(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	reachable := true
 	bri := 42.0
-	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true, Reachable: &reachable, Bri: &bri}}}
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true, Reachable: &reachable, Bri: &bri, Color: "yes"}}}
 	app := newTestApp(t, svc, stdout, stderr)
 
 	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--with-state"})
@@ -184,10 +189,10 @@ func TestRunLightsListCSVWithState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadAll() error = %v", err)
 	}
-	if strings.Join(records[0], ",") != "id,name,on,reachable,bri" {
+	if strings.Join(records[0], ",") != "id,name,on,reachable,bri,color" {
 		t.Fatalf("header = %v", records[0])
 	}
-	if strings.Join(records[1], ",") != "abc,Desk,true,true,42" {
+	if strings.Join(records[1], ",") != "abc,Desk,true,true,42,yes" {
 		t.Fatalf("row = %v", records[1])
 	}
 	if svc.lastListOptions.WithGroup || !svc.lastListOptions.WithState {
@@ -198,7 +203,7 @@ func TestRunLightsListCSVWithState(t *testing.T) {
 func TestRunLightsListCSVWideWithMissingFields(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true}}}
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true, Color: "unknown"}}}
 	app := newTestApp(t, svc, stdout, stderr)
 
 	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--wide"})
@@ -210,10 +215,10 @@ func TestRunLightsListCSVWideWithMissingFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadAll() error = %v", err)
 	}
-	if strings.Join(records[0], ",") != "id,name,group,group_type,on,reachable,bri" {
+	if strings.Join(records[0], ",") != "id,name,group,group_type,on,reachable,bri,color" {
 		t.Fatalf("header = %v", records[0])
 	}
-	if strings.Join(records[1], ",") != "abc,Desk,,,true,," {
+	if strings.Join(records[1], ",") != "abc,Desk,,,true,,,unknown" {
 		t.Fatalf("row = %v", records[1])
 	}
 	if !svc.lastListOptions.WithGroup || !svc.lastListOptions.WithState {
@@ -275,6 +280,38 @@ func TestRunLightsListHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--with-group") || !strings.Contains(output, "--with-state") || !strings.Contains(output, "--wide") {
 		t.Fatalf("stdout missing phase3 options, got %q", output)
+	}
+	if !strings.Contains(output, "--group") {
+		t.Fatalf("stdout missing --group option, got %q", output)
+	}
+}
+
+func TestRunLightsListGroupFilter(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{lights: []hue.Light{
+		{ID: "a", Name: "Desk", Group: "Office", GroupType: "room", On: true},
+		{ID: "b", Name: "Lamp", Group: "Kitchen", GroupType: "room", On: true},
+	}}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--group", "kitchen"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reader := csv.NewReader(bytes.NewReader(stdout.Bytes()))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("record count = %d, want 2", len(records))
+	}
+	if strings.Join(records[1], ",") != "b,Lamp,Kitchen,room,true" {
+		t.Fatalf("row = %v", records[1])
+	}
+	if !svc.lastListOptions.WithGroup {
+		t.Fatalf("--group should imply withGroup, got %+v", svc.lastListOptions)
 	}
 }
 
