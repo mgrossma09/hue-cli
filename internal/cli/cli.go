@@ -153,14 +153,20 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 	}
 
 	if len(lights) == 0 {
-		fmt.Fprintln(stdout, "no lights found")
+		if _, err := fmt.Fprintln(stdout, "no lights found"); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
 		return nil
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, strings.ToUpper(strings.Join(listCSVColumns(*withGroup, *withState), "\t")))
+	if _, err := fmt.Fprintln(tw, strings.ToUpper(strings.Join(listCSVColumns(*withGroup, *withState), "\t"))); err != nil {
+		return fmt.Errorf("write table header: %w", err)
+	}
 	for _, light := range lights {
-		fmt.Fprintln(tw, strings.Join(renderCSVRow(light, *withGroup, *withState), "\t"))
+		if _, err := fmt.Fprintln(tw, strings.Join(renderCSVRow(light, *withGroup, *withState), "\t")); err != nil {
+			return fmt.Errorf("write table row: %w", err)
+		}
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("flush table output: %w", err)
@@ -170,23 +176,23 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 }
 
 func printLightsListUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Options:")
-	fmt.Fprintln(w, "  --json  Output lights as JSON")
-	fmt.Fprintln(w, "  --csv   Output lights as CSV")
-	fmt.Fprintln(w, "  --with-group  Include group and group_type fields")
-	fmt.Fprintln(w, "  --with-state  Include reachable, bri, and color fields")
-	fmt.Fprintln(w, "  --wide  Include both group metadata and extra state")
-	fmt.Fprintln(w, "  --group  Filter by room/zone name (implies --with-group)")
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Options:")
+	_, _ = fmt.Fprintln(w, "  --json  Output lights as JSON")
+	_, _ = fmt.Fprintln(w, "  --csv   Output lights as CSV")
+	_, _ = fmt.Fprintln(w, "  --with-group  Include group and group_type fields")
+	_, _ = fmt.Fprintln(w, "  --with-state  Include reachable, bri, and color fields")
+	_, _ = fmt.Fprintln(w, "  --wide  Include both group metadata and extra state")
+	_, _ = fmt.Fprintln(w, "  --group  Filter by room/zone name (implies --with-group)")
 }
 
 func printLightsUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
-	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
-	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
+	_, _ = fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	_, _ = fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
 }
 
 func listCSVColumns(withGroup, withState bool) []string {
@@ -291,21 +297,25 @@ func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService,
 		}
 	}
 	if *id != "" || *name != "" {
-		fmt.Fprintf(stdout, "toggled %d light(s)\n", len(targetIDs))
+		if _, err := fmt.Fprintf(stdout, "toggled %d light(s)\n", len(targetIDs)); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
 		return nil
 	}
-	fmt.Fprintf(stdout, "toggled %d light(s) in group %s\n", len(targetIDs), *group)
+	if _, err := fmt.Fprintf(stdout, "toggled %d light(s) in group %s\n", len(targetIDs), *group); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
 	return nil
 }
 
 func printLightsToggleUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Options:")
-	fmt.Fprintln(w, "  --id     Hue light ID")
-	fmt.Fprintln(w, "  --group  Room/zone name")
-	fmt.Fprintln(w, "  --name   Light name within group (requires --group)")
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Options:")
+	_, _ = fmt.Fprintln(w, "  --id     Hue light ID")
+	_, _ = fmt.Fprintln(w, "  --group  Room/zone name")
+	_, _ = fmt.Fprintln(w, "  --name   Light name within group (requires --group)")
 }
 
 func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
@@ -389,26 +399,30 @@ func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, ar
 		}
 	}
 	if *id != "" || *name != "" {
-		fmt.Fprintf(stdout, "updated %d light(s)\n", len(targetIDs))
+		if _, err := fmt.Fprintf(stdout, "updated %d light(s)\n", len(targetIDs)); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
 		return nil
 	}
-	fmt.Fprintf(stdout, "updated %d light(s) in group %s\n", len(targetIDs), *group)
+	if _, err := fmt.Fprintf(stdout, "updated %d light(s) in group %s\n", len(targetIDs), *group); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
 	return nil
 }
 
 func printLightsSetUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Options:")
-	fmt.Fprintln(w, "  --id    Hue light ID")
-	fmt.Fprintln(w, "  --group Room/zone name")
-	fmt.Fprintln(w, "  --name  Light name within group (requires --group)")
-	fmt.Fprintln(w, "  --on    Turn light on")
-	fmt.Fprintln(w, "  --off   Turn light off")
-	fmt.Fprintln(w, "  --bri   Brightness 0-100")
-	fmt.Fprintln(w, "  --ct    Color temperature in mireks")
-	fmt.Fprintln(w, "  --xy    XY color coordinates formatted as x,y")
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Options:")
+	_, _ = fmt.Fprintln(w, "  --id    Hue light ID")
+	_, _ = fmt.Fprintln(w, "  --group Room/zone name")
+	_, _ = fmt.Fprintln(w, "  --name  Light name within group (requires --group)")
+	_, _ = fmt.Fprintln(w, "  --on    Turn light on")
+	_, _ = fmt.Fprintln(w, "  --off   Turn light off")
+	_, _ = fmt.Fprintln(w, "  --bri   Brightness 0-100")
+	_, _ = fmt.Fprintln(w, "  --ct    Color temperature in mireks")
+	_, _ = fmt.Fprintln(w, "  --xy    XY color coordinates formatted as x,y")
 }
 
 func resolveLightTargetIDs(ctx context.Context, client lightService, id, group, name string) ([]string, error) {
@@ -469,12 +483,12 @@ func parseXY(raw string) (*hue.XY, error) {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "huectl - control Philips Hue lights via Hue API v2")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights list")
-	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
-	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	_, _ = fmt.Fprintln(w, "huectl - control Philips Hue lights via Hue API v2")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl lights list")
+	_, _ = fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	_, _ = fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
 }
 
 func isHelpArg(arg string) bool {

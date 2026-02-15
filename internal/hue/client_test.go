@@ -323,7 +323,9 @@ func TestUpdateLightPayload(t *testing.T) {
 		if r.Method != http.MethodPut {
 			t.Fatalf("method = %q", r.Method)
 		}
-		defer r.Body.Close()
+		defer func() {
+			_ = r.Body.Close()
+		}()
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("Decode() error = %v", err)
 		}
@@ -378,7 +380,9 @@ func TestToggleLight(t *testing.T) {
 			if r.Method != http.MethodPut || r.URL.Path != "/clip/v2/resource/light/light-1" {
 				t.Fatalf("unexpected second request: %s %s", r.Method, r.URL.Path)
 			}
-			defer r.Body.Close()
+			defer func() {
+				_ = r.Body.Close()
+			}()
 			body, _ := io.ReadAll(r.Body)
 			if string(body) != `{"on":{"on":true}}` {
 				t.Fatalf("body = %s", string(body))
