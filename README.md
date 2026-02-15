@@ -2,6 +2,10 @@
 
 `huectl` is a Go CLI for controlling Philips Hue lights via Hue API v2.
 
+Project website: https://mgrossma09.github.io/hue-cli/
+
+Project website is hosted via GitHub Pages.
+
 ## Install
 
 ### Homebrew
