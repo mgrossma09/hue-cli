@@ -1,3 +1,4 @@
 /bin/
 .huectl/config.json
 config.json
+.envrc
