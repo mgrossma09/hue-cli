@@ -37,7 +37,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 }
 
 func (a App) Run(ctx context.Context, args []string) error {
-	if len(args) == 0 {
+	if len(args) == 0 || isHelpArg(args[0]) {
 		printUsage(a.Stdout)
 		return nil
 	}
@@ -215,4 +215,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  huectl lights list")
 	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
 	fmt.Fprintln(w, "  huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+}
+
+func isHelpArg(arg string) bool {
+	return arg == "-h" || arg == "--help"
 }
