@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>huectl - Philips Hue CLI</title>
+    <meta name="description" content="huectl is a fast, scriptable Philips Hue CLI using Hue API v2." />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="hero" id="top">
+      <div class="container">
+        <div class="brand-row">
+          <img src="./assets/logo.svg" alt="huectl logo" class="logo" />
+          <span class="brand">huectl</span>
+        </div>
+        <h1>Fast, scriptable Philips Hue CLI (Hue API v2)</h1>
+        <p>
+          Automate lights with a clean command-line interface built for shell scripts and quick terminal workflows.
+          Works on macOS and Linux with explicit bridge configuration.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">Install</a>
+          <a class="btn btn-secondary" href="https://github.com/mgrossma09/hue-cli" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+        <div class="badges" aria-label="Project badges">
+          <a href="https://github.com/mgrossma09/hue-cli/actions/workflows/ci.yml" target="_blank" rel="noreferrer">
+            <img src="https://img.shields.io/github/actions/workflow/status/mgrossma09/hue-cli/ci.yml?branch=main&label=CI" alt="CI status" />
+          </a>
+          <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">
+            <img src="https://img.shields.io/github/v/release/mgrossma09/hue-cli?label=release" alt="Latest release" />
+          </a>
+          <a href="https://github.com/mgrossma09/hue-cli/blob/main/LICENSE" target="_blank" rel="noreferrer">
+            <img src="https://img.shields.io/github/license/mgrossma09/hue-cli" alt="License" />
+          </a>
+          <a href="https://go.dev/" target="_blank" rel="noreferrer">
+            <img src="https://img.shields.io/badge/go-1.22%2B-00ADD8" alt="Go version" />
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <h2>Features</h2>
+          <div class="grid features-grid">
+            <article class="card">
+              <h3>Hue API v2</h3>
+              <p>Built for modern Philips Hue API v2 endpoints with practical defaults.</p>
+            </article>
+            <article class="card">
+              <h3>Script-Friendly CSV</h3>
+              <p>Quick parsing and automation with CSV output modes for shell pipelines.</p>
+            </article>
+            <article class="card">
+              <h3>Explicit Config</h3>
+              <p>No bridge discovery required. Set host and token via env vars or config file.</p>
+            </article>
+            <article class="card">
+              <h3>Cross-Platform</h3>
+              <p>Prebuilt binaries for macOS and Linux on amd64 and arm64.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="screenshots">
+        <div class="container">
+          <h2>Screenshots</h2>
+          <p class="muted">Terminal-style previews of common commands.</p>
+          <div class="grid screenshots-grid">
+            <article class="terminal-card">
+              <h3>lights list --csv</h3>
+              <pre><code>$ huectl lights list --csv
+id,name,on
+18a1-...,Kitchen,true
+2f3b-...,Office,false</code></pre>
+            </article>
+            <article class="terminal-card">
+              <h3>lights toggle --group</h3>
+              <pre><code>$ huectl lights toggle --group Kitchen
+toggled 3 light(s) in group Kitchen</code></pre>
+            </article>
+            <article class="terminal-card">
+              <h3>lights list --wide</h3>
+              <pre><code>$ huectl lights list --csv --wide
+id,name,group,group_type,on,reachable,bri,color
+18a1-...,Kitchen,Kitchen,room,true,true,62,yes</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <div class="container">
+          <h2>Install</h2>
+          <div class="install-grid">
+            <article class="card">
+              <h3>Homebrew</h3>
+              <pre><code>brew tap mgrossma09/tap
+brew install huectl</code></pre>
+            </article>
+            <article class="card">
+              <h3>GitHub Releases</h3>
+              <p>Download the platform tarball, extract, and move <code>huectl</code> into your PATH.</p>
+              <p class="muted">Requires at least one published GitHub Release.</p>
+            </article>
+            <article class="card">
+              <h3>install.sh</h3>
+              <pre><code>curl -fL -o install.sh \
+  https://raw.githubusercontent.com/mgrossma09/hue-cli/main/install.sh
+bash install.sh</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="quickstart">
+        <div class="container">
+          <h2>Quickstart</h2>
+          <pre><code>export HUE_BRIDGE_HOST=192.168.1.2
+export HUE_API_TOKEN=your-hue-token
+
+huectl lights list --csv
+huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-row">
+        <span>huectl</span>
+        <nav>
+          <a href="https://github.com/mgrossma09/hue-cli" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/mgrossma09/hue-cli/issues" target="_blank" rel="noreferrer">Issues</a>
+          <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">Releases</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
