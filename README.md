@@ -2,6 +2,58 @@
 
 `huectl` is a Go CLI for controlling Philips Hue lights via Hue API v2.
 
+## Install
+
+### Homebrew
+
+```bash
+brew tap mgrossma09/tap
+brew install huectl
+```
+
+Note: the tap repository is `mgrossma09/homebrew-tap`.
+
+### GitHub Releases (manual)
+
+1. Download the archive for your platform from Releases.
+2. Extract and move the binary into your PATH.
+
+Example for macOS arm64 (`v0.1.0`):
+
+```bash
+curl -fL -o huectl.tar.gz https://github.com/mgrossma09/hue-cli/releases/download/v0.1.0/huectl_0.1.0_darwin_arm64.tar.gz
+tar -xzf huectl.tar.gz
+mv huectl /usr/local/bin/huectl
+```
+
+### install.sh
+
+Safe two-step:
+
+```bash
+curl -fL -o install.sh https://raw.githubusercontent.com/mgrossma09/hue-cli/main/install.sh
+bash install.sh
+```
+
+One-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mgrossma09/hue-cli/main/install.sh | bash
+```
+
+Optional installer environment variables:
+
+- `VERSION=0.1.0` or `VERSION=v0.1.0` to install a specific release (default: latest)
+- `INSTALL_DIR=/custom/bin` to override install destination
+- `REPO_OWNER` / `REPO_NAME` to override GitHub source
+
+Installer behavior:
+
+- Detects macOS/Linux and amd64/arm64
+- Downloads matching tarball + `checksums.txt`
+- Verifies SHA256 using `shasum -a 256` or `sha256sum` when available
+- Installs into `/usr/local/bin` if writable, otherwise `~/.local/bin`
+
 ## Features
 
 - `huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]`
@@ -178,8 +230,16 @@ If hook installation is unavailable locally, CI still enforces test/lint/build.
 
 ## CI
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on pushes to `main` and pull requests with:
+GitHub Actions workflows:
+
+- `.github/workflows/ci.yml` for push/PR checks
+- `.github/workflows/release.yml` for tag (`v*`) releases
+
+Release workflow runs:
 
 - `make test`
 - `make lint`
-- `make build`
+- `goreleaser check`
+- `goreleaser release --clean`
+
+See `RELEASING.md` for release instructions.
