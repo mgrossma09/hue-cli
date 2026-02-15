@@ -42,7 +42,8 @@ jobs:
           version: latest
           args: check
 
-      - name: Release
+      - name: Release (With Homebrew)
+        if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
@@ -51,3 +52,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Release (Skip Homebrew)
+        if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN == '' }}
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean --skip=homebrew
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
