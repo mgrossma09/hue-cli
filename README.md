@@ -4,7 +4,7 @@
 
 ## Features
 
-- `huectl lights list`
+- `huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide]`
 - `huectl lights toggle --id <id>`
 - `huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]`
 - Configuration from environment variables or local config file (environment wins)
@@ -62,6 +62,30 @@ List lights:
 huectl lights list
 ```
 
+List lights with group metadata (room/zone):
+
+```bash
+huectl lights list --with-group
+```
+
+List lights with additional state:
+
+```bash
+huectl lights list --with-state
+```
+
+List lights in wide mode (`--with-group --with-state`):
+
+```bash
+huectl lights list --wide
+```
+
+List lights as CSV with wide columns:
+
+```bash
+huectl lights list --csv --wide
+```
+
 Toggle a light:
 
 ```bash
@@ -84,6 +108,12 @@ Notes:
 
 - Resource IDs are treated as strings.
 - `lights set` sends only fields corresponding to provided flags.
+- `lights list --csv` column order:
+  - default: `id,name,on`
+  - `--with-group`: `id,name,group,group_type,on`
+  - `--with-state`: `id,name,on,reachable,bri`
+  - `--wide`: `id,name,group,group_type,on,reachable,bri`
+- If a light appears in multiple groups, `huectl` picks the first group deterministically (sorted by group type then ID).
 
 ## Development
 

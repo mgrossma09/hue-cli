@@ -44,3 +44,14 @@
   - Missing config/token
   - Partial updates include only specified fields
   - Hue API error envelope propagation
+
+## Phase 3 notes
+
+- Enrich `lights list` without changing default output:
+  - `--with-group`
+  - `--with-state`
+  - `--wide` (`--with-group --with-state`)
+- Additional Hue endpoints used for group mapping:
+  - `GET /resource/grouped_light`
+  - `GET /resource/room`
+  - `GET /resource/zone`
