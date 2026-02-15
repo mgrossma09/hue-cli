@@ -140,8 +140,9 @@ pre {
   background: #0b1525;
   border: 1px solid #1f3150;
   border-radius: 10px;
-  padding: 0.9rem;
+  padding: 2rem 0.9rem 0.9rem;
   color: #d3ffe7;
+  position: relative;
 }
 
 .install-grid {
@@ -170,6 +171,29 @@ pre {
 
 .footer a:last-child {
   margin-right: 0;
+}
+
+.footer-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  border: 1px solid #2f4568;
+  background: #102038;
+  color: #dff8ee;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
 }
 
 @media (max-width: 640px) {

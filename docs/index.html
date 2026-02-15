@@ -137,6 +137,54 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
           <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">Releases</a>
         </nav>
       </div>
+      <div class="container footer-meta">
+        <small>
+          Maintained by Michael Grossmann (San Francisco) ·
+          <a href="https://www.linkedin.com/in/mischl123/" target="_blank" rel="noreferrer">LinkedIn</a>
+        </small>
+        <small>This project is not affiliated with Signify or Philips Hue.</small>
+      </div>
     </footer>
+    <script>
+      (function () {
+        var codeBlocks = document.querySelectorAll("pre");
+        codeBlocks.forEach(function (pre) {
+          var code = pre.querySelector("code");
+          if (!code) return;
+
+          var button = document.createElement("button");
+          button.className = "copy-btn";
+          button.type = "button";
+          button.setAttribute("aria-label", "Copy code");
+          button.textContent = "⧉";
+
+          button.addEventListener("click", function () {
+            var text = code.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                button.textContent = "✓";
+                setTimeout(function () {
+                  button.textContent = "⧉";
+                }, 1000);
+              });
+              return;
+            }
+
+            var temp = document.createElement("textarea");
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand("copy");
+            document.body.removeChild(temp);
+            button.textContent = "✓";
+            setTimeout(function () {
+              button.textContent = "⧉";
+            }, 1000);
+          });
+
+          pre.appendChild(button);
+        });
+      })();
+    </script>
   </body>
 </html>

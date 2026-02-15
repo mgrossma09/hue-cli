@@ -6,6 +6,10 @@ Project website: https://mgrossma09.github.io/hue-cli/
 
 Project website is hosted via GitHub Pages.
 
+License: MIT (see `LICENSE`).
+
+This project is not affiliated with Signify or Philips Hue.
+
 ## Install
 
 ### Homebrew
