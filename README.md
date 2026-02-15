@@ -28,6 +28,7 @@ Environment variables:
 
 - `HUE_BRIDGE_HOST`
 - `HUE_API_TOKEN`
+- `HUE_INSECURE_TLS` (`true`/`false`, optional, defaults to `false`)
 
 Default config file path:
 
@@ -38,11 +39,20 @@ Config schema:
 ```json
 {
   "bridge_host": "192.168.1.2",
-  "api_token": "your-hue-v2-token"
+  "api_token": "your-hue-v2-token",
+  "insecure_tls": false
 }
 ```
 
 See `config.example.json`.
+
+For Hue bridges using certificates that fail local verification, you can set:
+
+```bash
+export HUE_INSECURE_TLS=true
+```
+
+Use this only on trusted local networks.
 
 ## Usage Examples
 

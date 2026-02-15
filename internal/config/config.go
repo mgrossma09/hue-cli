@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 const (
-	EnvBridgeHost = "HUE_BRIDGE_HOST"
-	EnvAPIToken   = "HUE_API_TOKEN"
+	EnvBridgeHost  = "HUE_BRIDGE_HOST"
+	EnvAPIToken    = "HUE_API_TOKEN"
+	EnvInsecureTLS = "HUE_INSECURE_TLS"
 )
 
 var (
@@ -19,8 +21,9 @@ var (
 )
 
 type Config struct {
-	BridgeHost string `json:"bridge_host"`
-	APIToken   string `json:"api_token"`
+	BridgeHost  string `json:"bridge_host"`
+	APIToken    string `json:"api_token"`
+	InsecureTLS bool   `json:"insecure_tls"`
 }
 
 func (c Config) Validate() error {
@@ -62,6 +65,13 @@ func Load(path string) (Config, error) {
 	}
 	if envToken := os.Getenv(EnvAPIToken); envToken != "" {
 		cfg.APIToken = envToken
+	}
+	if envInsecureTLS := os.Getenv(EnvInsecureTLS); envInsecureTLS != "" {
+		insecureTLS, err := strconv.ParseBool(envInsecureTLS)
+		if err != nil {
+			return Config{}, fmt.Errorf("parse %s: %w", EnvInsecureTLS, err)
+		}
+		cfg.InsecureTLS = insecureTLS
 	}
 
 	return cfg, nil

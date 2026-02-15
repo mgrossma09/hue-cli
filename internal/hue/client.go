@@ -3,6 +3,7 @@ package hue
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,6 +79,9 @@ type lightResource struct {
 func NewClient(cfg config.Config, httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
+	}
+	if cfg.InsecureTLS {
+		httpClient = cloneWithInsecureTLS(httpClient)
 	}
 	baseURL := normalizeBaseURL(cfg.BridgeHost)
 	return &Client{
@@ -239,4 +243,26 @@ func normalizeBaseURL(host string) string {
 		return trimmed
 	}
 	return "https://" + trimmed
+}
+
+func cloneWithInsecureTLS(httpClient *http.Client) *http.Client {
+	clonedClient := *httpClient
+
+	var transport *http.Transport
+	switch t := clonedClient.Transport.(type) {
+	case nil:
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	case *http.Transport:
+		transport = t.Clone()
+	default:
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	transport.TLSClientConfig.InsecureSkipVerify = true
+	clonedClient.Transport = transport
+
+	return &clonedClient
 }

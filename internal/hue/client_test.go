@@ -2,6 +2,7 @@ package hue
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -25,6 +26,43 @@ func TestNewClient_DefaultHTTPClient(t *testing.T) {
 	}
 	if client.BaseURL != "https://192.168.1.2" {
 		t.Fatalf("BaseURL = %q, want %q", client.BaseURL, "https://192.168.1.2")
+	}
+}
+
+func TestNewClient_InsecureTLS(t *testing.T) {
+	cfg := config.Config{BridgeHost: "192.168.1.2", APIToken: "token", InsecureTLS: true}
+	client := NewClient(cfg, nil)
+
+	transport, ok := client.HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", client.HTTPClient.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("InsecureSkipVerify = false, want true")
+	}
+}
+
+func TestNewClient_InsecureTLS_ClonesTransport(t *testing.T) {
+	base := http.Transport{TLSClientConfig: &tls.Config{}}
+	srcClient := &http.Client{Transport: &base}
+	cfg := config.Config{BridgeHost: "192.168.1.2", APIToken: "token", InsecureTLS: true}
+
+	client := NewClient(cfg, srcClient)
+	if client.HTTPClient == srcClient {
+		t.Fatal("client pointer should be cloned")
+	}
+	transport, ok := client.HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", client.HTTPClient.Transport)
+	}
+	if !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("InsecureSkipVerify = false, want true")
+	}
+	if base.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("source transport was mutated")
 	}
 }
 
