@@ -83,7 +83,11 @@ type updateResponse struct {
 }
 
 type lightResource struct {
-	ID       string `json:"id"`
+	ID    string `json:"id"`
+	Owner *struct {
+		RID   string `json:"rid"`
+		RType string `json:"rtype"`
+	} `json:"owner,omitempty"`
 	Metadata struct {
 		Name string `json:"name"`
 	} `json:"metadata"`
@@ -159,7 +163,7 @@ func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptio
 	var lightToGroup map[string]lightGroupInfo
 	if opts.WithGroup {
 		var err error
-		lightToGroup, err = c.fetchLightGroupMap(ctx)
+		lightToGroup, err = c.fetchLightGroupMap(ctx, resp.Data)
 		if err != nil {
 			return nil, err
 		}
@@ -359,7 +363,7 @@ func cloneWithInsecureTLS(httpClient *http.Client) *http.Client {
 	return &clonedClient
 }
 
-func (c *Client) fetchLightGroupMap(ctx context.Context) (map[string]lightGroupInfo, error) {
+func (c *Client) fetchLightGroupMap(ctx context.Context, lights []lightResource) (map[string]lightGroupInfo, error) {
 	groupedLights, err := c.fetchGroupedLights(ctx)
 	if err != nil {
 		return nil, err
@@ -372,6 +376,13 @@ func (c *Client) fetchLightGroupMap(ctx context.Context) (map[string]lightGroupI
 	groupedByOwner := make(map[string]groupedLightResource, len(groupedLights))
 	for _, gl := range groupedLights {
 		groupedByOwner[gl.Owner.RID] = gl
+	}
+	ownerToLights := make(map[string][]string)
+	for _, light := range lights {
+		if light.Owner == nil || light.Owner.RType != "device" {
+			continue
+		}
+		ownerToLights[light.Owner.RID] = append(ownerToLights[light.Owner.RID], light.ID)
 	}
 
 	infoByGroupedID := make(map[string]lightGroupInfo, len(groupedLights))
@@ -410,12 +421,18 @@ func (c *Client) fetchLightGroupMap(ctx context.Context) (map[string]lightGroupI
 			continue
 		}
 		for _, child := range group.Children {
-			if child.RType != "light" {
-				continue
-			}
-			// Deterministic on duplicates: first group in sorted order wins.
-			if _, exists := lightToGroup[child.RID]; !exists {
-				lightToGroup[child.RID] = info
+			switch child.RType {
+			case "light":
+				// Deterministic on duplicates: first group in sorted order wins.
+				if _, exists := lightToGroup[child.RID]; !exists {
+					lightToGroup[child.RID] = info
+				}
+			case "device":
+				for _, lightID := range ownerToLights[child.RID] {
+					if _, exists := lightToGroup[lightID]; !exists {
+						lightToGroup[lightID] = info
+					}
+				}
 			}
 		}
 	}

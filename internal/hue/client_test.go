@@ -102,8 +102,8 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 		switch r.URL.Path {
 		case "/clip/v2/resource/light":
 			_, _ = io.WriteString(w, `{"data":[
-				{"id":"light-1","metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":65.2},"status":"connected"},
-				{"id":"light-2","metadata":{"name":"Lamp"},"on":{"on":false},"status":"disconnected"},
+				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":65.2},"status":"connected"},
+				{"id":"light-2","owner":{"rid":"device-2","rtype":"device"},"metadata":{"name":"Lamp"},"on":{"on":false},"status":"disconnected"},
 				{"id":"light-3","metadata":{"name":"Porch"},"on":{"on":true}}
 			]}`)
 		case "/clip/v2/resource/grouped_light":
@@ -114,12 +114,12 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 			]}`)
 		case "/clip/v2/resource/room":
 			_, _ = io.WriteString(w, `{"data":[
-				{"id":"room-1","type":"room","metadata":{"name":"Kitchen"},"services":[{"rid":"grouped-room-1","rtype":"grouped_light"}],"children":[{"rid":"light-1","rtype":"light"}]},
-				{"id":"room-2","type":"room","metadata":{"name":"Office"},"services":[{"rid":"grouped-room-2","rtype":"grouped_light"}],"children":[{"rid":"light-1","rtype":"light"},{"rid":"light-3","rtype":"light"}]}
+				{"id":"room-1","type":"room","metadata":{"name":"Kitchen"},"services":[{"rid":"grouped-room-1","rtype":"grouped_light"}],"children":[{"rid":"device-1","rtype":"device"}]},
+				{"id":"room-2","type":"room","metadata":{"name":"Office"},"services":[{"rid":"grouped-room-2","rtype":"grouped_light"}],"children":[{"rid":"device-1","rtype":"device"},{"rid":"light-3","rtype":"light"}]}
 			]}`)
 		case "/clip/v2/resource/zone":
 			_, _ = io.WriteString(w, `{"data":[
-				{"id":"zone-1","type":"zone","metadata":{"name":"Upstairs"},"services":[{"rid":"grouped-zone-1","rtype":"grouped_light"}],"children":[{"rid":"light-2","rtype":"light"}]}
+				{"id":"zone-1","type":"zone","metadata":{"name":"Upstairs"},"services":[{"rid":"grouped-zone-1","rtype":"grouped_light"}],"children":[{"rid":"device-2","rtype":"device"}]}
 			]}`)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -169,6 +169,42 @@ func TestListLightsWithOptions_GroupAndState(t *testing.T) {
 	}
 	if light3.Reachable != nil {
 		t.Fatalf("light-3 reachable = %#v, want nil", light3.Reachable)
+	}
+}
+
+func TestListLightsWithOptions_GroupFromDeviceChildren(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clip/v2/resource/light":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"light-1","owner":{"rid":"device-1","rtype":"device"},"metadata":{"name":"Desk"},"on":{"on":true}}
+			]}`)
+		case "/clip/v2/resource/grouped_light":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"grouped-room-1","type":"grouped_light","owner":{"rid":"room-1","rtype":"room"}}
+			]}`)
+		case "/clip/v2/resource/room":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"room-1","type":"room","metadata":{"name":"Kitchen"},"services":[{"rid":"grouped-room-1","rtype":"grouped_light"}],"children":[{"rid":"device-1","rtype":"device"}]}
+			]}`)
+		case "/clip/v2/resource/zone":
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{BridgeHost: server.URL, APIToken: "token"}, server.Client())
+	lights, err := client.ListLightsWithOptions(context.Background(), ListLightsOptions{WithGroup: true})
+	if err != nil {
+		t.Fatalf("ListLightsWithOptions() error = %v", err)
+	}
+	if len(lights) != 1 {
+		t.Fatalf("len(lights) = %d, want 1", len(lights))
+	}
+	if lights[0].Group != "Kitchen" || lights[0].GroupType != "room" {
+		t.Fatalf("unexpected group data: %+v", lights[0])
 	}
 }
 
