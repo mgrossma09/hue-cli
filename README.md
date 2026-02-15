@@ -2,28 +2,26 @@
 
 `huectl` is a Go CLI for controlling Philips Hue lights via Hue API v2.
 
-Phase 1 in this repository focuses on project scaffolding (CLI wiring, config loading, CI, linting, and tests). Hue API command behavior is intentionally stubbed and is planned for Phase 2.
+## Features
 
-## Goals
-
-- Simple CLI interface for common light operations.
-- Configuration via environment variables or local config file.
-- No bridge discovery (host is provided explicitly).
-- Safe secret handling (do not print full tokens by default).
+- `huectl lights list`
+- `huectl lights toggle --id <id>`
+- `huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]`
+- Configuration from environment variables or local config file (environment wins)
+- No bridge discovery; bridge host is explicitly provided
+- Token-safe behavior (never prints full token)
 
 ## Prerequisites
 
 - Go 1.22+
-- A reachable Philips Hue bridge
-- A Hue API v2 application key/token
-
-Hue token setup guidance is available in Philips Hue developer documentation for local API access.
+- Reachable Philips Hue bridge
+- Hue API v2 application key/token
 
 ## Configuration
 
-Configuration sources:
+Configuration is loaded from:
 
-- Environment variables (take precedence)
+- Environment variables (highest priority)
 - Config file (fallback)
 
 Environment variables:
@@ -31,11 +29,11 @@ Environment variables:
 - `HUE_BRIDGE_HOST`
 - `HUE_API_TOKEN`
 
-Config file path:
+Default config file path:
 
-- Default: `$XDG_CONFIG_HOME/huectl/config.json` (or platform equivalent from `os.UserConfigDir`)
+- `$XDG_CONFIG_HOME/huectl/config.json` (or platform equivalent from `os.UserConfigDir`)
 
-JSON schema:
+Config schema:
 
 ```json
 {
@@ -44,26 +42,40 @@ JSON schema:
 }
 ```
 
-A sample file is provided in `config.example.json`.
+See `config.example.json`.
 
-Redaction behavior:
+## Usage Examples
 
-- API tokens must not be logged in full by default.
-- When token display is needed for debugging, use a redacted format.
-
-## CLI Commands (planned in Phase 2)
+List lights:
 
 ```bash
 huectl lights list
-huectl lights toggle --id <id>
-huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]
 ```
 
-Resource IDs are treated as strings. For `lights set`, only explicitly provided flags will be sent in requests.
+Toggle a light:
+
+```bash
+huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef
+```
+
+Set a light on with brightness and color temperature:
+
+```bash
+huectl lights set --id 01234567-89ab-cdef-0123-456789abcdef --on --bri 60 --ct 250
+```
+
+Set XY color only:
+
+```bash
+huectl lights set --id 01234567-89ab-cdef-0123-456789abcdef --xy 0.21,0.32
+```
+
+Notes:
+
+- Resource IDs are treated as strings.
+- `lights set` sends only fields corresponding to provided flags.
 
 ## Development
-
-Common tasks:
 
 ```bash
 make test
@@ -85,16 +97,11 @@ brew install pre-commit
 pre-commit install
 ```
 
-If local hook installation is unavailable in your environment, rely on CI lint/test/build checks.
+If hook installation is unavailable locally, CI still enforces test/lint/build.
 
 ## CI
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on:
-
-- Pushes to `main`
-- Pull requests
-
-CI runs:
+GitHub Actions workflow at `.github/workflows/ci.yml` runs on pushes to `main` and pull requests with:
 
 - `make test`
 - `make lint`
