@@ -359,6 +359,37 @@ func TestRunHelpWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestRunLightsHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "--help"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "huectl lights list") {
+		t.Fatalf("stdout missing lights usage, got %q", output)
+	}
+}
+
+func TestRunLightsHelpShort(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "-h"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, "Usage:") {
+		t.Fatalf("stdout missing usage, got %q", got)
+	}
+}
+
 func TestRunLightsToggle(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

@@ -69,8 +69,9 @@ func (a App) Run(ctx context.Context, args []string) error {
 }
 
 func (a App) runLights(ctx context.Context, client lightService, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("%w: missing lights subcommand", ErrUsage)
+	if len(args) == 0 || isHelpArg(args[0]) {
+		printLightsUsage(a.Stdout)
+		return nil
 	}
 
 	switch args[0] {
@@ -179,6 +180,13 @@ func printLightsListUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --with-state  Include reachable, bri, and color fields")
 	fmt.Fprintln(w, "  --wide  Include both group metadata and extra state")
 	fmt.Fprintln(w, "  --group  Filter by room/zone name (implies --with-group)")
+}
+
+func printLightsUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
+	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
+	fmt.Fprintln(w, "  huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
 }
 
 func listCSVColumns(withGroup, withState bool) []string {
