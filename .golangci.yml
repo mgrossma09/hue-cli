@@ -4,13 +4,10 @@ run:
   timeout: 3m
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
-
-issues:
-  exclude-use-default: false
