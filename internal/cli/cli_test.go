@@ -14,17 +14,24 @@ import (
 )
 
 type fakeLightService struct {
-	lights    []hue.Light
-	toggleID  string
-	updateID  string
-	updateReq hue.UpdateLightRequest
-	listErr   error
-	toggleErr error
-	updateErr error
+	lights          []hue.Light
+	lastListOptions hue.ListLightsOptions
+	toggleID        string
+	updateID        string
+	updateReq       hue.UpdateLightRequest
+	listErr         error
+	toggleErr       error
+	updateErr       error
 }
 
 func (f *fakeLightService) ListLights(ctx context.Context) ([]hue.Light, error) {
 	_ = ctx
+	return f.lights, f.listErr
+}
+
+func (f *fakeLightService) ListLightsWithOptions(ctx context.Context, opts hue.ListLightsOptions) ([]hue.Light, error) {
+	_ = ctx
+	f.lastListOptions = opts
 	return f.lights, f.listErr
 }
 
@@ -77,6 +84,9 @@ func TestRunLightsList(t *testing.T) {
 	}
 	if got := strings.Fields(lines[1]); len(got) != 3 || got[0] != "abc" || got[1] != "Desk" || got[2] != "true" {
 		t.Fatalf("row fields = %#v", got)
+	}
+	if svc.lastListOptions.WithGroup || svc.lastListOptions.WithState {
+		t.Fatalf("unexpected list options: %+v", svc.lastListOptions)
 	}
 }
 
@@ -131,6 +141,106 @@ func TestRunLightsListCSV(t *testing.T) {
 	}
 }
 
+func TestRunLightsListCSVWithGroup(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", Group: "Kitchen", GroupType: "room", On: true}}}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--with-group"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reader := csv.NewReader(bytes.NewReader(stdout.Bytes()))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if strings.Join(records[0], ",") != "id,name,group,group_type,on" {
+		t.Fatalf("header = %v", records[0])
+	}
+	if strings.Join(records[1], ",") != "abc,Desk,Kitchen,room,true" {
+		t.Fatalf("row = %v", records[1])
+	}
+	if !svc.lastListOptions.WithGroup || svc.lastListOptions.WithState {
+		t.Fatalf("unexpected list options: %+v", svc.lastListOptions)
+	}
+}
+
+func TestRunLightsListCSVWithState(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	reachable := true
+	bri := 42.0
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true, Reachable: &reachable, Bri: &bri}}}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--with-state"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reader := csv.NewReader(bytes.NewReader(stdout.Bytes()))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if strings.Join(records[0], ",") != "id,name,on,reachable,bri" {
+		t.Fatalf("header = %v", records[0])
+	}
+	if strings.Join(records[1], ",") != "abc,Desk,true,true,42" {
+		t.Fatalf("row = %v", records[1])
+	}
+	if svc.lastListOptions.WithGroup || !svc.lastListOptions.WithState {
+		t.Fatalf("unexpected list options: %+v", svc.lastListOptions)
+	}
+}
+
+func TestRunLightsListCSVWideWithMissingFields(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true}}}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--wide"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reader := csv.NewReader(bytes.NewReader(stdout.Bytes()))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if strings.Join(records[0], ",") != "id,name,group,group_type,on,reachable,bri" {
+		t.Fatalf("header = %v", records[0])
+	}
+	if strings.Join(records[1], ",") != "abc,Desk,,,true,," {
+		t.Fatalf("row = %v", records[1])
+	}
+	if !svc.lastListOptions.WithGroup || !svc.lastListOptions.WithState {
+		t.Fatalf("unexpected list options: %+v", svc.lastListOptions)
+	}
+}
+
+func TestRunLightsListCSVWithGroupNoGroup(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{lights: []hue.Light{{ID: "abc", Name: "Desk", On: true}}}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "list", "--csv", "--with-group"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	reader := csv.NewReader(bytes.NewReader(stdout.Bytes()))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if strings.Join(records[1], ",") != "abc,Desk,,,true" {
+		t.Fatalf("row = %v", records[1])
+	}
+}
+
 func TestRunLightsListFormatMutuallyExclusive(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -162,6 +272,9 @@ func TestRunLightsListHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--json") || !strings.Contains(output, "--csv") {
 		t.Fatalf("stdout missing options, got %q", output)
+	}
+	if !strings.Contains(output, "--with-group") || !strings.Contains(output, "--with-state") || !strings.Contains(output, "--wide") {
+		t.Fatalf("stdout missing phase3 options, got %q", output)
 	}
 }
 

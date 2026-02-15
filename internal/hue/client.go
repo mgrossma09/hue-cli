@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mgrossma09/hue-cli/internal/config"
@@ -31,9 +33,13 @@ type Client struct {
 }
 
 type Light struct {
-	ID   string
-	Name string
-	On   bool
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Group     string   `json:"group,omitempty"`
+	GroupType string   `json:"group_type,omitempty"`
+	On        bool     `json:"on"`
+	Reachable *bool    `json:"reachable,omitempty"`
+	Bri       *float64 `json:"bri,omitempty"`
 }
 
 type UpdateLightRequest struct {
@@ -57,6 +63,16 @@ type listLightsResponse struct {
 	Errors []apiErrorDetail `json:"errors"`
 }
 
+type groupedLightsResponse struct {
+	Data   []groupedLightResource `json:"data"`
+	Errors []apiErrorDetail       `json:"errors"`
+}
+
+type groupsResponse struct {
+	Data   []groupResource  `json:"data"`
+	Errors []apiErrorDetail `json:"errors"`
+}
+
 type lightResponse struct {
 	Data   []lightResource  `json:"data"`
 	Errors []apiErrorDetail `json:"errors"`
@@ -74,6 +90,44 @@ type lightResource struct {
 	On struct {
 		On bool `json:"on"`
 	} `json:"on"`
+	Dimming *struct {
+		Brightness float64 `json:"brightness"`
+	} `json:"dimming,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+type groupedLightResource struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Owner struct {
+		RID   string `json:"rid"`
+		RType string `json:"rtype"`
+	} `json:"owner"`
+}
+
+type groupResource struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Metadata struct {
+		Name string `json:"name"`
+	} `json:"metadata"`
+	Services []resourceRef `json:"services"`
+	Children []resourceRef `json:"children"`
+}
+
+type resourceRef struct {
+	RID   string `json:"rid"`
+	RType string `json:"rtype"`
+}
+
+type ListLightsOptions struct {
+	WithGroup bool
+	WithState bool
+}
+
+type lightGroupInfo struct {
+	Name string
+	Type string
 }
 
 func NewClient(cfg config.Config, httpClient *http.Client) *Client {
@@ -93,18 +147,48 @@ func NewClient(cfg config.Config, httpClient *http.Client) *Client {
 }
 
 func (c *Client) ListLights(ctx context.Context) ([]Light, error) {
+	return c.ListLightsWithOptions(ctx, ListLightsOptions{})
+}
+
+func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptions) ([]Light, error) {
 	var resp listLightsResponse
 	if err := c.doJSON(ctx, http.MethodGet, apiBasePath+"/resource/light", nil, &resp); err != nil {
 		return nil, err
 	}
 
+	var lightToGroup map[string]lightGroupInfo
+	if opts.WithGroup {
+		var err error
+		lightToGroup, err = c.fetchLightGroupMap(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	lights := make([]Light, 0, len(resp.Data))
 	for _, item := range resp.Data {
-		lights = append(lights, Light{
+		light := Light{
 			ID:   item.ID,
 			Name: item.Metadata.Name,
 			On:   item.On.On,
-		})
+		}
+		if opts.WithState {
+			if item.Dimming != nil {
+				bri := item.Dimming.Brightness
+				light.Bri = &bri
+			}
+			if item.Status != "" {
+				reachable := strings.EqualFold(item.Status, "connected")
+				light.Reachable = &reachable
+			}
+		}
+		if opts.WithGroup {
+			if group, ok := lightToGroup[item.ID]; ok {
+				light.Group = group.Name
+				light.GroupType = group.Type
+			}
+		}
+		lights = append(lights, light)
 	}
 	return lights, nil
 }
@@ -223,6 +307,14 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, d
 		if len(typed.Errors) > 0 {
 			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
 		}
+	case *groupedLightsResponse:
+		if len(typed.Errors) > 0 {
+			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
+		}
+	case *groupsResponse:
+		if len(typed.Errors) > 0 {
+			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
+		}
 	case *lightResponse:
 		if len(typed.Errors) > 0 {
 			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
@@ -265,4 +357,113 @@ func cloneWithInsecureTLS(httpClient *http.Client) *http.Client {
 	clonedClient.Transport = transport
 
 	return &clonedClient
+}
+
+func (c *Client) fetchLightGroupMap(ctx context.Context) (map[string]lightGroupInfo, error) {
+	groupedLights, err := c.fetchGroupedLights(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := c.fetchGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	groupedByOwner := make(map[string]groupedLightResource, len(groupedLights))
+	for _, gl := range groupedLights {
+		groupedByOwner[gl.Owner.RID] = gl
+	}
+
+	infoByGroupedID := make(map[string]lightGroupInfo, len(groupedLights))
+	for _, gl := range groupedLights {
+		infoByGroupedID[gl.ID] = lightGroupInfo{Name: "", Type: gl.Type}
+	}
+	for _, group := range groups {
+		groupedID := firstGroupedLightID(group.Services)
+		if groupedID == "" {
+			if gl, ok := groupedByOwner[group.ID]; ok {
+				groupedID = gl.ID
+			}
+		}
+		if groupedID == "" {
+			continue
+		}
+		infoByGroupedID[groupedID] = lightGroupInfo{
+			Name: group.Metadata.Name,
+			Type: group.Type,
+		}
+	}
+
+	lightToGroup := make(map[string]lightGroupInfo)
+	for _, group := range groups {
+		groupedID := firstGroupedLightID(group.Services)
+		if groupedID == "" {
+			if gl, ok := groupedByOwner[group.ID]; ok {
+				groupedID = gl.ID
+			}
+		}
+		if groupedID == "" {
+			continue
+		}
+		info, ok := infoByGroupedID[groupedID]
+		if !ok {
+			continue
+		}
+		for _, child := range group.Children {
+			if child.RType != "light" {
+				continue
+			}
+			// Deterministic on duplicates: first group in sorted order wins.
+			if _, exists := lightToGroup[child.RID]; !exists {
+				lightToGroup[child.RID] = info
+			}
+		}
+	}
+
+	return lightToGroup, nil
+}
+
+func (c *Client) fetchGroupedLights(ctx context.Context) ([]groupedLightResource, error) {
+	var resp groupedLightsResponse
+	if err := c.doJSON(ctx, http.MethodGet, apiBasePath+"/resource/grouped_light", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+func (c *Client) fetchGroups(ctx context.Context) ([]groupResource, error) {
+	var roomsResp groupsResponse
+	if err := c.doJSON(ctx, http.MethodGet, apiBasePath+"/resource/room", nil, &roomsResp); err != nil {
+		return nil, err
+	}
+	var zonesResp groupsResponse
+	if err := c.doJSON(ctx, http.MethodGet, apiBasePath+"/resource/zone", nil, &zonesResp); err != nil {
+		return nil, err
+	}
+
+	groups := append([]groupResource{}, roomsResp.Data...)
+	groups = append(groups, zonesResp.Data...)
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Type == groups[j].Type {
+			return groups[i].ID < groups[j].ID
+		}
+		return groups[i].Type < groups[j].Type
+	})
+	return groups, nil
+}
+
+func firstGroupedLightID(services []resourceRef) string {
+	for _, service := range services {
+		if service.RType == "grouped_light" {
+			return service.RID
+		}
+	}
+	return ""
+}
+
+func FormatBrightness(value *float64) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.Itoa(int(*value + 0.5))
 }

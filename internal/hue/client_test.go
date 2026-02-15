@@ -77,7 +77,7 @@ func TestListLights(t *testing.T) {
 		if got := r.Header.Get("hue-application-key"); got != "token" {
 			t.Fatalf("hue-application-key = %q", got)
 		}
-		_, _ = io.WriteString(w, `{"data":[{"id":"id-1","metadata":{"name":"Desk"},"on":{"on":true}}]}`)
+		_, _ = io.WriteString(w, `{"data":[{"id":"id-1","metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":66.6},"status":"connected"}]}`)
 	}))
 	defer server.Close()
 
@@ -91,6 +91,114 @@ func TestListLights(t *testing.T) {
 	}
 	if lights[0].ID != "id-1" || lights[0].Name != "Desk" || !lights[0].On {
 		t.Fatalf("unexpected light: %+v", lights[0])
+	}
+	if lights[0].Bri != nil || lights[0].Reachable != nil || lights[0].Group != "" || lights[0].GroupType != "" {
+		t.Fatalf("default list unexpectedly included optional fields: %+v", lights[0])
+	}
+}
+
+func TestListLightsWithOptions_GroupAndState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clip/v2/resource/light":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"light-1","metadata":{"name":"Desk"},"on":{"on":true},"dimming":{"brightness":65.2},"status":"connected"},
+				{"id":"light-2","metadata":{"name":"Lamp"},"on":{"on":false},"status":"disconnected"},
+				{"id":"light-3","metadata":{"name":"Porch"},"on":{"on":true}}
+			]}`)
+		case "/clip/v2/resource/grouped_light":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"grouped-room-1","type":"grouped_light","owner":{"rid":"room-1","rtype":"room"}},
+				{"id":"grouped-zone-1","type":"grouped_light","owner":{"rid":"zone-1","rtype":"zone"}},
+				{"id":"grouped-room-2","type":"grouped_light","owner":{"rid":"room-2","rtype":"room"}}
+			]}`)
+		case "/clip/v2/resource/room":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"room-1","type":"room","metadata":{"name":"Kitchen"},"services":[{"rid":"grouped-room-1","rtype":"grouped_light"}],"children":[{"rid":"light-1","rtype":"light"}]},
+				{"id":"room-2","type":"room","metadata":{"name":"Office"},"services":[{"rid":"grouped-room-2","rtype":"grouped_light"}],"children":[{"rid":"light-1","rtype":"light"},{"rid":"light-3","rtype":"light"}]}
+			]}`)
+		case "/clip/v2/resource/zone":
+			_, _ = io.WriteString(w, `{"data":[
+				{"id":"zone-1","type":"zone","metadata":{"name":"Upstairs"},"services":[{"rid":"grouped-zone-1","rtype":"grouped_light"}],"children":[{"rid":"light-2","rtype":"light"}]}
+			]}`)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{BridgeHost: server.URL, APIToken: "token"}, server.Client())
+	lights, err := client.ListLightsWithOptions(context.Background(), ListLightsOptions{WithGroup: true, WithState: true})
+	if err != nil {
+		t.Fatalf("ListLightsWithOptions() error = %v", err)
+	}
+	if len(lights) != 3 {
+		t.Fatalf("len(lights) = %d, want 3", len(lights))
+	}
+
+	byID := map[string]Light{}
+	for _, light := range lights {
+		byID[light.ID] = light
+	}
+
+	light1 := byID["light-1"]
+	if light1.Group != "Kitchen" || light1.GroupType != "room" {
+		t.Fatalf("light-1 group = (%q,%q), want (Kitchen,room)", light1.Group, light1.GroupType)
+	}
+	if light1.Reachable == nil || !*light1.Reachable {
+		t.Fatalf("light-1 reachable = %#v, want true", light1.Reachable)
+	}
+	if light1.Bri == nil || *light1.Bri != 65.2 {
+		t.Fatalf("light-1 bri = %#v, want 65.2", light1.Bri)
+	}
+
+	light2 := byID["light-2"]
+	if light2.Group != "Upstairs" || light2.GroupType != "zone" {
+		t.Fatalf("light-2 group = (%q,%q), want (Upstairs,zone)", light2.Group, light2.GroupType)
+	}
+	if light2.Reachable == nil || *light2.Reachable {
+		t.Fatalf("light-2 reachable = %#v, want false", light2.Reachable)
+	}
+	if light2.Bri != nil {
+		t.Fatalf("light-2 bri = %#v, want nil", light2.Bri)
+	}
+
+	light3 := byID["light-3"]
+	if light3.Group != "Office" || light3.GroupType != "room" {
+		t.Fatalf("light-3 group = (%q,%q), want (Office,room)", light3.Group, light3.GroupType)
+	}
+	if light3.Reachable != nil {
+		t.Fatalf("light-3 reachable = %#v, want nil", light3.Reachable)
+	}
+}
+
+func TestListLightsWithOptions_NoGroupFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clip/v2/resource/light":
+			_, _ = io.WriteString(w, `{"data":[{"id":"light-1","metadata":{"name":"Desk"},"on":{"on":true}}]}`)
+		case "/clip/v2/resource/grouped_light":
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		case "/clip/v2/resource/room":
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		case "/clip/v2/resource/zone":
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{BridgeHost: server.URL, APIToken: "token"}, server.Client())
+	lights, err := client.ListLightsWithOptions(context.Background(), ListLightsOptions{WithGroup: true})
+	if err != nil {
+		t.Fatalf("ListLightsWithOptions() error = %v", err)
+	}
+	if len(lights) != 1 {
+		t.Fatalf("len(lights) = %d, want 1", len(lights))
+	}
+	if lights[0].Group != "" || lights[0].GroupType != "" {
+		t.Fatalf("unexpected group info: %+v", lights[0])
 	}
 }
 

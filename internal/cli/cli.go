@@ -23,6 +23,7 @@ var (
 
 type lightService interface {
 	ListLights(ctx context.Context) ([]hue.Light, error)
+	ListLightsWithOptions(ctx context.Context, opts hue.ListLightsOptions) ([]hue.Light, error)
 	ToggleLight(ctx context.Context, id string) error
 	UpdateLight(ctx context.Context, id string, req hue.UpdateLightRequest) error
 }
@@ -90,6 +91,9 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 
 	jsonOut := fs.Bool("json", false, "Output as JSON")
 	csvOut := fs.Bool("csv", false, "Output as CSV")
+	withGroup := fs.Bool("with-group", false, "Include room/zone group metadata")
+	withState := fs.Bool("with-state", false, "Include additional state fields")
+	wide := fs.Bool("wide", false, "Equivalent to --with-group --with-state")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			printLightsListUsage(stdout)
@@ -103,8 +107,15 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 	if *jsonOut && *csvOut {
 		return fmt.Errorf("%w: --json and --csv are mutually exclusive", ErrUsage)
 	}
+	if *wide {
+		*withGroup = true
+		*withState = true
+	}
 
-	lights, err := client.ListLights(ctx)
+	lights, err := client.ListLightsWithOptions(ctx, hue.ListLightsOptions{
+		WithGroup: *withGroup,
+		WithState: *withState,
+	})
 	if err != nil {
 		return err
 	}
@@ -112,15 +123,16 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 	if *jsonOut {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(lights)
+		return encoder.Encode(buildListJSONRows(lights, *withGroup, *withState))
 	}
 	if *csvOut {
 		writer := csv.NewWriter(stdout)
-		if err := writer.Write([]string{"id", "name", "on"}); err != nil {
+		header := listCSVColumns(*withGroup, *withState)
+		if err := writer.Write(header); err != nil {
 			return fmt.Errorf("write csv header: %w", err)
 		}
 		for _, light := range lights {
-			row := []string{light.ID, light.Name, strconv.FormatBool(light.On)}
+			row := renderCSVRow(light, *withGroup, *withState)
 			if err := writer.Write(row); err != nil {
 				return fmt.Errorf("write csv row: %w", err)
 			}
@@ -138,9 +150,9 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tNAME\tON")
+	fmt.Fprintln(tw, strings.ToUpper(strings.Join(listCSVColumns(*withGroup, *withState), "\t")))
 	for _, light := range lights {
-		fmt.Fprintf(tw, "%s\t%s\t%t\n", light.ID, light.Name, light.On)
+		fmt.Fprintln(tw, strings.Join(renderCSVRow(light, *withGroup, *withState), "\t"))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("flush table output: %w", err)
@@ -151,11 +163,68 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 
 func printLightsListUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights list [--json|--csv]")
+	fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --json  Output lights as JSON")
 	fmt.Fprintln(w, "  --csv   Output lights as CSV")
+	fmt.Fprintln(w, "  --with-group  Include group and group_type fields")
+	fmt.Fprintln(w, "  --with-state  Include reachable and bri fields")
+	fmt.Fprintln(w, "  --wide  Include both group metadata and extra state")
+}
+
+func listCSVColumns(withGroup, withState bool) []string {
+	switch {
+	case withGroup && withState:
+		return []string{"id", "name", "group", "group_type", "on", "reachable", "bri"}
+	case withGroup:
+		return []string{"id", "name", "group", "group_type", "on"}
+	case withState:
+		return []string{"id", "name", "on", "reachable", "bri"}
+	default:
+		return []string{"id", "name", "on"}
+	}
+}
+
+func renderCSVRow(light hue.Light, withGroup, withState bool) []string {
+	row := []string{light.ID, light.Name}
+	if withGroup {
+		row = append(row, light.Group, light.GroupType)
+	}
+	row = append(row, strconv.FormatBool(light.On))
+	if withState {
+		reachable := ""
+		if light.Reachable != nil {
+			reachable = strconv.FormatBool(*light.Reachable)
+		}
+		row = append(row, reachable, hue.FormatBrightness(light.Bri))
+	}
+	return row
+}
+
+func buildListJSONRows(lights []hue.Light, withGroup, withState bool) []map[string]any {
+	rows := make([]map[string]any, 0, len(lights))
+	for _, light := range lights {
+		row := map[string]any{
+			"id":   light.ID,
+			"name": light.Name,
+			"on":   light.On,
+		}
+		if withGroup {
+			row["group"] = light.Group
+			row["group_type"] = light.GroupType
+		}
+		if withState {
+			if light.Reachable != nil {
+				row["reachable"] = *light.Reachable
+			} else {
+				row["reachable"] = ""
+			}
+			row["bri"] = hue.FormatBrightness(light.Bri)
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
