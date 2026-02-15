@@ -68,6 +68,11 @@ type groupedLightsResponse struct {
 	Errors []apiErrorDetail       `json:"errors"`
 }
 
+type zigbeeConnectivityResponse struct {
+	Data   []zigbeeConnectivityResource `json:"data"`
+	Errors []apiErrorDetail             `json:"errors"`
+}
+
 type groupsResponse struct {
 	Data   []groupResource  `json:"data"`
 	Errors []apiErrorDetail `json:"errors"`
@@ -107,6 +112,14 @@ type groupedLightResource struct {
 		RID   string `json:"rid"`
 		RType string `json:"rtype"`
 	} `json:"owner"`
+}
+
+type zigbeeConnectivityResource struct {
+	Owner struct {
+		RID   string `json:"rid"`
+		RType string `json:"rtype"`
+	} `json:"owner"`
+	Status string `json:"status"`
 }
 
 type groupResource struct {
@@ -161,9 +174,17 @@ func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptio
 	}
 
 	var lightToGroup map[string]lightGroupInfo
+	var reachableByDevice map[string]bool
 	if opts.WithGroup {
 		var err error
 		lightToGroup, err = c.fetchLightGroupMap(ctx, resp.Data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if opts.WithState {
+		var err error
+		reachableByDevice, err = c.fetchReachableByDevice(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -180,6 +201,11 @@ func (c *Client) ListLightsWithOptions(ctx context.Context, opts ListLightsOptio
 			if item.Dimming != nil {
 				bri := item.Dimming.Brightness
 				light.Bri = &bri
+			}
+			if item.Owner != nil && item.Owner.RType == "device" {
+				if reachable, ok := reachableByDevice[item.Owner.RID]; ok {
+					light.Reachable = &reachable
+				}
 			}
 			if item.Status != "" {
 				reachable := strings.EqualFold(item.Status, "connected")
@@ -316,6 +342,10 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, d
 			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
 		}
 	case *groupsResponse:
+		if len(typed.Errors) > 0 {
+			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
+		}
+	case *zigbeeConnectivityResponse:
 		if len(typed.Errors) > 0 {
 			return fmt.Errorf("hue api error: %s", typed.Errors[0].Description)
 		}
@@ -483,4 +513,20 @@ func FormatBrightness(value *float64) string {
 		return ""
 	}
 	return strconv.Itoa(int(*value + 0.5))
+}
+
+func (c *Client) fetchReachableByDevice(ctx context.Context) (map[string]bool, error) {
+	var resp zigbeeConnectivityResponse
+	if err := c.doJSON(ctx, http.MethodGet, apiBasePath+"/resource/zigbee_connectivity", nil, &resp); err != nil {
+		return nil, err
+	}
+
+	reachableByDevice := make(map[string]bool, len(resp.Data))
+	for _, item := range resp.Data {
+		if item.Owner.RType != "device" {
+			continue
+		}
+		reachableByDevice[item.Owner.RID] = strings.EqualFold(item.Status, "connected")
+	}
+	return reachableByDevice, nil
 }
