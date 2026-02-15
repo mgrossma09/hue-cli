@@ -5,8 +5,8 @@
 ## Features
 
 - `huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]`
-- `huectl lights toggle --id <id>`
-- `huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]`
+- `huectl lights toggle (--id <id> | --group <group> [--name <name>])`
+- `huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]`
 - Configuration from environment variables or local config file (environment wins)
 - No bridge discovery; bridge host is explicitly provided
 - Token-safe behavior (never prints full token)
@@ -98,10 +98,34 @@ Toggle a light:
 huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef
 ```
 
+Toggle all lights in a group:
+
+```bash
+huectl lights toggle --group Kitchen
+```
+
+Toggle one light by group/name:
+
+```bash
+huectl lights toggle --group Kitchen --name Island
+```
+
 Set a light on with brightness and color temperature:
 
 ```bash
 huectl lights set --id 01234567-89ab-cdef-0123-456789abcdef --on --bri 60 --ct 250
+```
+
+Set all lights in a group:
+
+```bash
+huectl lights set --group Kitchen --off
+```
+
+Set one light by group/name:
+
+```bash
+huectl lights set --group Kitchen --name Island --on --bri 50
 ```
 
 Set XY color only:
@@ -114,6 +138,11 @@ Notes:
 
 - Resource IDs are treated as strings.
 - `lights set` sends only fields corresponding to provided flags.
+- For `lights toggle` and `lights set`, target selection is:
+  - `--id <id>` OR
+  - `--group <group> [--name <name>]`
+- `--id` is mutually exclusive with `--group`/`--name`.
+- If only `--group` is provided for toggle/set, the command applies to all lights in that group.
 - `lights list --csv` column order:
   - default: `id,name,on`
   - `--with-group`: `id,name,group,group_type,on`

@@ -185,8 +185,8 @@ func printLightsListUsage(w io.Writer) {
 func printLightsUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]")
-	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
-	fmt.Fprintln(w, "  huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
 }
 
 func listCSVColumns(withGroup, withState bool) []string {
@@ -259,6 +259,8 @@ func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService,
 	fs.SetOutput(io.Discard)
 
 	id := fs.String("id", "", "Hue light ID")
+	group := fs.String("group", "", "Room/zone name")
+	name := fs.String("name", "", "Light name within group")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			printLightsToggleUsage(stdout)
@@ -269,20 +271,41 @@ func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService,
 	if fs.NArg() != 0 {
 		return fmt.Errorf("%w: unexpected positional arguments", ErrUsage)
 	}
-	if *id == "" {
-		return fmt.Errorf("%w: --id is required", ErrUsage)
+	if *id != "" && (*group != "" || *name != "") {
+		return fmt.Errorf("%w: --id is mutually exclusive with --group/--name", ErrUsage)
+	}
+	if *name != "" && *group == "" {
+		return fmt.Errorf("%w: --name requires --group", ErrUsage)
+	}
+	if *id == "" && *group == "" {
+		return fmt.Errorf("%w: one of --id or --group is required", ErrUsage)
 	}
 
-	if err := client.ToggleLight(ctx, *id); err != nil {
+	targetIDs, err := resolveLightTargetIDs(ctx, client, *id, *group, *name)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "toggled light %s\n", *id)
+	for _, targetID := range targetIDs {
+		if err := client.ToggleLight(ctx, targetID); err != nil {
+			return fmt.Errorf("toggle %s: %w", targetID, err)
+		}
+	}
+	if *id != "" || *name != "" {
+		fmt.Fprintf(stdout, "toggled %d light(s)\n", len(targetIDs))
+		return nil
+	}
+	fmt.Fprintf(stdout, "toggled %d light(s) in group %s\n", len(targetIDs), *group)
 	return nil
 }
 
 func printLightsToggleUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
+	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  --id     Hue light ID")
+	fmt.Fprintln(w, "  --group  Room/zone name")
+	fmt.Fprintln(w, "  --name   Light name within group (requires --group)")
 }
 
 func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
@@ -290,6 +313,8 @@ func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, ar
 	fs.SetOutput(io.Discard)
 
 	id := fs.String("id", "", "Hue light ID")
+	group := fs.String("group", "", "Room/zone name")
+	name := fs.String("name", "", "Light name within group")
 	on := fs.Bool("on", false, "Turn light on")
 	off := fs.Bool("off", false, "Turn light off")
 	bri := fs.Int("bri", -1, "Brightness 0-100")
@@ -297,13 +322,23 @@ func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, ar
 	xy := fs.String("xy", "", "XY color coordinates as x,y")
 
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printLightsSetUsage(stdout)
+			return nil
+		}
 		return fmt.Errorf("%w: %v", ErrUsage, err)
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("%w: unexpected positional arguments", ErrUsage)
 	}
-	if *id == "" {
-		return fmt.Errorf("%w: --id is required", ErrUsage)
+	if *id != "" && (*group != "" || *name != "") {
+		return fmt.Errorf("%w: --id is mutually exclusive with --group/--name", ErrUsage)
+	}
+	if *name != "" && *group == "" {
+		return fmt.Errorf("%w: --name requires --group", ErrUsage)
+	}
+	if *id == "" && *group == "" {
+		return fmt.Errorf("%w: one of --id or --group is required", ErrUsage)
 	}
 	if *on && *off {
 		return fmt.Errorf("%w: --on and --off are mutually exclusive", ErrUsage)
@@ -344,11 +379,72 @@ func runLightsSet(ctx context.Context, stdout io.Writer, client lightService, ar
 		return fmt.Errorf("%w: at least one field must be provided", ErrUsage)
 	}
 
-	if err := client.UpdateLight(ctx, *id, req); err != nil {
+	targetIDs, err := resolveLightTargetIDs(ctx, client, *id, *group, *name)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "updated light %s\n", *id)
+	for _, targetID := range targetIDs {
+		if err := client.UpdateLight(ctx, targetID, req); err != nil {
+			return fmt.Errorf("set %s: %w", targetID, err)
+		}
+	}
+	if *id != "" || *name != "" {
+		fmt.Fprintf(stdout, "updated %d light(s)\n", len(targetIDs))
+		return nil
+	}
+	fmt.Fprintf(stdout, "updated %d light(s) in group %s\n", len(targetIDs), *group)
 	return nil
+}
+
+func printLightsSetUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  --id    Hue light ID")
+	fmt.Fprintln(w, "  --group Room/zone name")
+	fmt.Fprintln(w, "  --name  Light name within group (requires --group)")
+	fmt.Fprintln(w, "  --on    Turn light on")
+	fmt.Fprintln(w, "  --off   Turn light off")
+	fmt.Fprintln(w, "  --bri   Brightness 0-100")
+	fmt.Fprintln(w, "  --ct    Color temperature in mireks")
+	fmt.Fprintln(w, "  --xy    XY color coordinates formatted as x,y")
+}
+
+func resolveLightTargetIDs(ctx context.Context, client lightService, id, group, name string) ([]string, error) {
+	if id != "" {
+		return []string{id}, nil
+	}
+	lights, err := client.ListLightsWithOptions(ctx, hue.ListLightsOptions{WithGroup: true})
+	if err != nil {
+		return nil, err
+	}
+
+	matches := make([]hue.Light, 0, len(lights))
+	for _, light := range lights {
+		if !strings.EqualFold(light.Group, group) {
+			continue
+		}
+		if name != "" && !strings.EqualFold(light.Name, name) {
+			continue
+		}
+		matches = append(matches, light)
+	}
+	if len(matches) == 0 {
+		if name != "" {
+			return nil, fmt.Errorf("%w: no light found for --group %q and --name %q", ErrUsage, group, name)
+		}
+		return nil, fmt.Errorf("%w: no lights found for --group %q", ErrUsage, group)
+	}
+	if name != "" && len(matches) > 1 {
+		return nil, fmt.Errorf("%w: multiple lights matched --group %q and --name %q; use --id", ErrUsage, group, name)
+	}
+
+	ids := make([]string, 0, len(matches))
+	for _, light := range matches {
+		ids = append(ids, light.ID)
+	}
+	return ids, nil
 }
 
 func parseXY(raw string) (*hue.XY, error) {
@@ -377,8 +473,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  huectl lights list")
-	fmt.Fprintln(w, "  huectl lights toggle --id <id>")
-	fmt.Fprintln(w, "  huectl lights set --id <id> [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
+	fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
 }
 
 func isHelpArg(arg string) bool {

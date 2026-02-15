@@ -17,8 +17,11 @@ type fakeLightService struct {
 	lights          []hue.Light
 	lastListOptions hue.ListLightsOptions
 	toggleID        string
+	toggleIDs       []string
 	updateID        string
+	updateIDs       []string
 	updateReq       hue.UpdateLightRequest
+	updateReqs      []hue.UpdateLightRequest
 	listErr         error
 	toggleErr       error
 	updateErr       error
@@ -38,13 +41,16 @@ func (f *fakeLightService) ListLightsWithOptions(ctx context.Context, opts hue.L
 func (f *fakeLightService) ToggleLight(ctx context.Context, id string) error {
 	_ = ctx
 	f.toggleID = id
+	f.toggleIDs = append(f.toggleIDs, id)
 	return f.toggleErr
 }
 
 func (f *fakeLightService) UpdateLight(ctx context.Context, id string, req hue.UpdateLightRequest) error {
 	_ = ctx
 	f.updateID = id
+	f.updateIDs = append(f.updateIDs, id)
 	f.updateReq = req
+	f.updateReqs = append(f.updateReqs, req)
 	return f.updateErr
 }
 
@@ -403,6 +409,9 @@ func TestRunLightsToggle(t *testing.T) {
 	if svc.toggleID != "light-1" {
 		t.Fatalf("toggleID = %q", svc.toggleID)
 	}
+	if len(svc.toggleIDs) != 1 {
+		t.Fatalf("toggleIDs len = %d, want 1", len(svc.toggleIDs))
+	}
 }
 
 func TestRunLightsToggleHelp(t *testing.T) {
@@ -415,7 +424,7 @@ func TestRunLightsToggleHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got := stdout.String(); !strings.Contains(got, "huectl lights toggle --id <id>") {
+	if got := stdout.String(); !strings.Contains(got, "huectl lights toggle (--id <id> | --group <group> [--name <name>])") {
 		t.Fatalf("stdout missing toggle usage, got %q", got)
 	}
 }
@@ -449,6 +458,9 @@ func TestRunLightsSet(t *testing.T) {
 	if svc.updateID != "light-1" {
 		t.Fatalf("updateID = %q", svc.updateID)
 	}
+	if len(svc.updateIDs) != 1 {
+		t.Fatalf("updateIDs len = %d, want 1", len(svc.updateIDs))
+	}
 	if svc.updateReq.On == nil || *svc.updateReq.On {
 		t.Fatalf("On = %#v", svc.updateReq.On)
 	}
@@ -460,6 +472,185 @@ func TestRunLightsSet(t *testing.T) {
 	}
 	if svc.updateReq.XY == nil || svc.updateReq.XY.X != 0.1 || svc.updateReq.XY.Y != 0.2 {
 		t.Fatalf("XY = %#v", svc.updateReq.XY)
+	}
+}
+
+func TestRunLightsToggleGroupAll(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{
+		lights: []hue.Light{
+			{ID: "a", Name: "Desk", Group: "Office"},
+			{ID: "b", Name: "Lamp", Group: "Office"},
+			{ID: "c", Name: "Porch", Group: "Outside"},
+		},
+	}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "--group", "office"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(svc.toggleIDs) != 2 || svc.toggleIDs[0] != "a" || svc.toggleIDs[1] != "b" {
+		t.Fatalf("toggleIDs = %v, want [a b]", svc.toggleIDs)
+	}
+	if !svc.lastListOptions.WithGroup {
+		t.Fatalf("expected group-aware list options, got %+v", svc.lastListOptions)
+	}
+}
+
+func TestRunLightsToggleGroupName(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{
+		lights: []hue.Light{
+			{ID: "a", Name: "Desk", Group: "Office"},
+			{ID: "b", Name: "Lamp", Group: "Office"},
+		},
+	}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "--group", "office", "--name", "lamp"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(svc.toggleIDs) != 1 || svc.toggleIDs[0] != "b" {
+		t.Fatalf("toggleIDs = %v, want [b]", svc.toggleIDs)
+	}
+}
+
+func TestRunLightsToggleGroupNameRequiresGroup(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "--name", "lamp"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRunLightsToggleMutuallyExclusiveTargetFlags(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "toggle", "--id", "x", "--group", "office"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRunLightsSetGroupAll(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{
+		lights: []hue.Light{
+			{ID: "a", Name: "Desk", Group: "Office"},
+			{ID: "b", Name: "Lamp", Group: "Office"},
+			{ID: "c", Name: "Porch", Group: "Outside"},
+		},
+	}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "--group", "office", "--off"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(svc.updateIDs) != 2 || svc.updateIDs[0] != "a" || svc.updateIDs[1] != "b" {
+		t.Fatalf("updateIDs = %v, want [a b]", svc.updateIDs)
+	}
+}
+
+func TestRunLightsSetGroupName(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{
+		lights: []hue.Light{
+			{ID: "a", Name: "Desk", Group: "Office"},
+			{ID: "b", Name: "Lamp", Group: "Office"},
+		},
+	}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "--group", "office", "--name", "desk", "--on"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(svc.updateIDs) != 1 || svc.updateIDs[0] != "a" {
+		t.Fatalf("updateIDs = %v, want [a]", svc.updateIDs)
+	}
+}
+
+func TestRunLightsSetGroupNameRequiresGroup(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "--name", "desk", "--on"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRunLightsSetMutuallyExclusiveTargetFlags(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "--id", "x", "--group", "office", "--on"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRunLightsSetHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "--help"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "huectl lights set (--id <id> | --group <group> [--name <name>])") {
+		t.Fatalf("stdout missing set usage, got %q", output)
+	}
+	if !strings.Contains(output, "--bri") || !strings.Contains(output, "--ct") || !strings.Contains(output, "--xy") || !strings.Contains(output, "--group") || !strings.Contains(output, "--name") {
+		t.Fatalf("stdout missing set options, got %q", output)
+	}
+}
+
+func TestRunLightsSetHelpShort(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	svc := &fakeLightService{}
+	app := newTestApp(t, svc, stdout, stderr)
+
+	err := app.Run(context.Background(), []string{"lights", "set", "-h"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, "Usage:") {
+		t.Fatalf("stdout missing usage, got %q", got)
 	}
 }
 
