@@ -128,6 +128,16 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
           </div>
         </div>
       </section>
+
+      <section class="section" id="releases">
+        <div class="container">
+          <h2>Releases</h2>
+          <p class="muted">Latest published releases from GitHub.</p>
+          <div id="release-list" class="release-list" aria-live="polite">
+            <p class="muted">Loading releases...</p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">
@@ -149,6 +159,80 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
     </footer>
     <script>
       (function () {
+        function formatDate(isoDate) {
+          var parsed = new Date(isoDate);
+          if (Number.isNaN(parsed.getTime())) return isoDate;
+          return parsed.toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          });
+        }
+
+        function escapeHTML(value) {
+          return value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        }
+
+        function renderReleases(items) {
+          var container = document.getElementById("release-list");
+          if (!container) return;
+
+          if (!items || items.length === 0) {
+            container.innerHTML =
+              '<p class="muted">No releases found yet. Check back soon or visit <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">GitHub Releases</a>.</p>';
+            return;
+          }
+
+          var html = items
+            .slice(0, 5)
+            .map(function (item) {
+              var tag = escapeHTML(item.tag_name || "unknown");
+              var url = item.html_url || "https://github.com/mgrossma09/hue-cli/releases";
+              var published = item.published_at ? formatDate(item.published_at) : "Unknown date";
+              var name = escapeHTML(item.name || tag);
+              return (
+                '<article class="release-item">' +
+                '<h3><a href="' +
+                url +
+                '" target="_blank" rel="noreferrer">' +
+                name +
+                "</a></h3>" +
+                '<p class="muted">Tag: ' +
+                tag +
+                " · Published: " +
+                published +
+                "</p>" +
+                "</article>"
+              );
+            })
+            .join("");
+
+          container.innerHTML = html;
+        }
+
+        function loadReleases() {
+          var endpoint = "https://api.github.com/repos/mgrossma09/hue-cli/releases?per_page=5";
+          fetch(endpoint)
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("GitHub API request failed");
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              renderReleases(data);
+            })
+            .catch(function () {
+              var container = document.getElementById("release-list");
+              if (!container) return;
+              container.innerHTML =
+                '<p class="muted">Could not load releases dynamically. Visit <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">GitHub Releases</a>.</p>';
+            });
+        }
+
         var codeBlocks = document.querySelectorAll("pre");
         codeBlocks.forEach(function (pre) {
           var code = pre.querySelector("code");
@@ -186,6 +270,8 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
 
           pre.appendChild(button);
         });
+
+        loadReleases();
       })();
     </script>
   </body>
