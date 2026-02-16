@@ -810,10 +810,36 @@ func TestRunHelpIncludesGetTokenHint(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 	output := stdout.String()
+	if !strings.Contains(output, "huectl --version") {
+		t.Fatalf("stdout missing --version usage, got %q", output)
+	}
 	if !strings.Contains(output, "huectl get-token --bridge-host <host>") {
 		t.Fatalf("stdout missing get-token usage, got %q", output)
 	}
 	if !strings.Contains(output, "press the Hue Bridge button") {
 		t.Fatalf("stdout missing bridge button hint, got %q", output)
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{Stdout: stdout, Stderr: stderr}
+
+	originalVersion := Version
+	Version = "v0.0.7"
+	t.Cleanup(func() {
+		Version = originalVersion
+	})
+
+	err := app.Run(context.Background(), []string{"--version"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "huectl v0.0.7" {
+		t.Fatalf("stdout = %q, want %q", got, "huectl v0.0.7")
+	}
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
 	}
 }

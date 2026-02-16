@@ -18,6 +18,7 @@ import (
 var (
 	ErrUsage        = errors.New("invalid command usage")
 	ErrInvalidRange = errors.New("flag value out of range")
+	Version         = "dev"
 )
 
 const (
@@ -51,6 +52,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 func (a App) Run(ctx context.Context, args []string) error {
 	if len(args) == 0 || isHelpArg(args[0]) {
 		printUsage(a.Stdout)
+		return nil
+	}
+	if args[0] == "--version" {
+		_, err := fmt.Fprintf(a.Stdout, "huectl %s\n", Version)
+		if err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
 		return nil
 	}
 	if args[0] == "get-token" {
@@ -620,6 +628,7 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "huectl - control Philips Hue lights via Hue API v2")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl --version")
 	_, _ = fmt.Fprintln(w, "  huectl get-token --bridge-host <host>")
 	_, _ = fmt.Fprintln(w, "  huectl lights list")
 	_, _ = fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")

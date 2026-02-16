@@ -6,6 +6,8 @@ builds:
   - id: huectl
     main: ./cmd/huectl
     binary: huectl
+    ldflags:
+      - -s -w -X github.com/mgrossma09/hue-cli/internal/cli.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     goos:

@@ -64,6 +64,7 @@ Installer behavior:
 
 ## Features
 
+- `huectl --version`
 - `huectl lights list [--json|--csv] [--with-group] [--with-state] [--wide] [--group <name>]`
 - `huectl lights toggle (--id <id> | --group <group> [--name <name>])`
 - `huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]`
@@ -115,6 +116,12 @@ export HUE_INSECURE_TLS=true
 Use this only on trusted local networks.
 
 ## Usage Examples
+
+Show CLI version:
+
+```bash
+huectl --version
+```
 
 List lights:
 
