@@ -6,12 +6,15 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/mgrossma09/hue-cli/internal/config"
 	"github.com/mgrossma09/hue-cli/internal/hue"
 )
+
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 type fakeLightService struct {
 	lights          []hue.Light
@@ -81,18 +84,47 @@ func TestRunLightsList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("line count = %d, want 2; output=%q", len(lines), stdout.String())
+	output := stdout.String()
+	lines := strings.Split(strings.TrimSpace(stripANSI(output)), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("line count = %d, want 5; output=%q", len(lines), stdout.String())
 	}
-	if got := strings.Fields(lines[0]); len(got) != 3 || got[0] != "ID" || got[1] != "NAME" || got[2] != "ON" {
-		t.Fatalf("header fields = %#v", got)
+	if lines[0] != "+-----+------+------+" {
+		t.Fatalf("top border = %q", lines[0])
 	}
-	if got := strings.Fields(lines[1]); len(got) != 3 || got[0] != "abc" || got[1] != "Desk" || got[2] != "true" {
-		t.Fatalf("row fields = %#v", got)
+	if lines[1] != "| ID  | NAME | ON   |" {
+		t.Fatalf("header row = %q", lines[1])
+	}
+	if lines[2] != "+-----+------+------+" {
+		t.Fatalf("middle border = %q", lines[2])
+	}
+	if lines[3] != "| abc | Desk | true |" {
+		t.Fatalf("data row = %q", lines[3])
+	}
+	if lines[4] != "+-----+------+------+" {
+		t.Fatalf("bottom border = %q", lines[4])
+	}
+	if !strings.Contains(output, "\x1b[36mID\x1b[0m") {
+		t.Fatalf("output missing cyan header color, got %q", output)
+	}
+	if !strings.Contains(output, "\x1b[32mtrue\x1b[0m") {
+		t.Fatalf("output missing green true color, got %q", output)
 	}
 	if svc.lastListOptions.WithGroup || svc.lastListOptions.WithState {
 		t.Fatalf("unexpected list options: %+v", svc.lastListOptions)
+	}
+}
+
+func stripANSI(s string) string {
+	return ansiPattern.ReplaceAllString(s, "")
+}
+
+func TestColorizeTableCellYesNo(t *testing.T) {
+	if got := colorizeTableCell("yes", false); got != "\x1b[32myes\x1b[0m" {
+		t.Fatalf("yes color = %q", got)
+	}
+	if got := colorizeTableCell("no", false); got != "\x1b[31mno\x1b[0m" {
+		t.Fatalf("no color = %q", got)
 	}
 }
 

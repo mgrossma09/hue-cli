@@ -149,6 +149,22 @@ pre {
   position: relative;
 }
 
+.ansi-cyan {
+  color: #4dd4ff;
+}
+
+.ansi-green {
+  color: #6ae57d;
+}
+
+.ansi-red {
+  color: #ff6a6a;
+}
+
+.ansi-yellow {
+  color: #ffd166;
+}
+
 .footer {
   border-top: 1px solid var(--border);
   padding: 1rem 0 2rem;

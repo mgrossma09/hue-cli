@@ -83,10 +83,14 @@ id,name,on
 toggled 3 light(s) in group Kitchen</code></pre>
             </article>
             <article class="terminal-card">
-              <h3>lights list --wide</h3>
-              <pre><code>$ huectl lights list --csv --wide
-id,name,group,group_type,on,reachable,bri,color
-18a1-...,Kitchen,Kitchen,room,true,true,62,yes</code></pre>
+              <h3>lights list (table + colors)</h3>
+              <pre><code>$ huectl lights list --wide
++---------+---------+---------+------------+------+-----------+-----+---------+
+| <span class="ansi-cyan">ID</span>      | <span class="ansi-cyan">NAME</span>    | <span class="ansi-cyan">GROUP</span>   | <span class="ansi-cyan">GROUP_TYPE</span> | <span class="ansi-cyan">ON</span>   | <span class="ansi-cyan">REACHABLE</span> | <span class="ansi-cyan">BRI</span> | <span class="ansi-cyan">COLOR</span>   |
++---------+---------+---------+------------+------+-----------+-----+---------+
+| 18a1-...| Kitchen | Kitchen | room       | <span class="ansi-green">true</span> | <span class="ansi-green">true</span>      | 62  | yes     |
+| 2f3b-...| Office  | Office  | room       | <span class="ansi-red">false</span>| <span class="ansi-yellow">unknown</span>   |     | <span class="ansi-yellow">unknown</span> |
++---------+---------+---------+------------+------+-----------+-----+---------+</code></pre>
             </article>
           </div>
         </div>

@@ -10,7 +10,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/mgrossma09/hue-cli/internal/config"
 	"github.com/mgrossma09/hue-cli/internal/hue"
@@ -19,6 +18,14 @@ import (
 var (
 	ErrUsage        = errors.New("invalid command usage")
 	ErrInvalidRange = errors.New("flag value out of range")
+)
+
+const (
+	ansiReset  = "\x1b[0m"
+	ansiCyan   = "\x1b[36m"
+	ansiGreen  = "\x1b[32m"
+	ansiRed    = "\x1b[31m"
+	ansiYellow = "\x1b[33m"
 )
 
 type lightService interface {
@@ -206,17 +213,13 @@ func runLightsList(ctx context.Context, stdout io.Writer, client lightService, a
 		return nil
 	}
 
-	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, strings.ToUpper(strings.Join(listCSVColumns(*withGroup, *withState), "\t"))); err != nil {
-		return fmt.Errorf("write table header: %w", err)
-	}
+	columns := listCSVColumns(*withGroup, *withState)
+	rows := make([][]string, 0, len(lights))
 	for _, light := range lights {
-		if _, err := fmt.Fprintln(tw, strings.Join(renderCSVRow(light, *withGroup, *withState), "\t")); err != nil {
-			return fmt.Errorf("write table row: %w", err)
-		}
+		rows = append(rows, renderCSVRow(light, *withGroup, *withState))
 	}
-	if err := tw.Flush(); err != nil {
-		return fmt.Errorf("flush table output: %w", err)
+	if err := writeTable(stdout, columns, rows); err != nil {
+		return err
 	}
 
 	return nil
@@ -305,6 +308,90 @@ func filterLightsByGroup(lights []hue.Light, group string) []hue.Light {
 		}
 	}
 	return filtered
+}
+
+func writeTable(w io.Writer, columns []string, rows [][]string) error {
+	headers := make([]string, len(columns))
+	widths := make([]int, len(columns))
+	for i, col := range columns {
+		headers[i] = strings.ToUpper(col)
+		widths[i] = len(headers[i])
+	}
+	for _, row := range rows {
+		for i := range columns {
+			if i >= len(row) {
+				continue
+			}
+			if len(row[i]) > widths[i] {
+				widths[i] = len(row[i])
+			}
+		}
+	}
+
+	border := "+"
+	for i, width := range widths {
+		if i > 0 {
+			border += "+"
+		}
+		border += strings.Repeat("-", width+2)
+	}
+	border += "+"
+
+	if _, err := fmt.Fprintln(w, border); err != nil {
+		return fmt.Errorf("write table border: %w", err)
+	}
+	if err := writeTableRow(w, headers, widths, true); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, border); err != nil {
+		return fmt.Errorf("write table border: %w", err)
+	}
+	for _, row := range rows {
+		if err := writeTableRow(w, row, widths, false); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, border); err != nil {
+		return fmt.Errorf("write table border: %w", err)
+	}
+	return nil
+}
+
+func writeTableRow(w io.Writer, row []string, widths []int, header bool) error {
+	if _, err := fmt.Fprint(w, "|"); err != nil {
+		return fmt.Errorf("write table row: %w", err)
+	}
+	for i, width := range widths {
+		cell := ""
+		if i < len(row) {
+			cell = row[i]
+		}
+		padding := strings.Repeat(" ", width-len(cell))
+		colored := colorizeTableCell(cell, header)
+		if _, err := fmt.Fprintf(w, " %s%s |", colored, padding); err != nil {
+			return fmt.Errorf("write table row: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return fmt.Errorf("write table row: %w", err)
+	}
+	return nil
+}
+
+func colorizeTableCell(cell string, header bool) string {
+	if header {
+		return ansiCyan + cell + ansiReset
+	}
+	switch strings.ToLower(strings.TrimSpace(cell)) {
+	case "true", "on", "yes":
+		return ansiGreen + cell + ansiReset
+	case "false", "off", "no":
+		return ansiRed + cell + ansiReset
+	case "unknown":
+		return ansiYellow + cell + ansiReset
+	default:
+		return cell
+	}
 }
 
 func runLightsToggle(ctx context.Context, stdout io.Writer, client lightService, args []string) error {
