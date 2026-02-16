@@ -54,6 +54,14 @@ func DefaultPath() (string, error) {
 	return filepath.Join(baseDir, "huectl", "config.json"), nil
 }
 
+func legacyDefaultPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home dir: %w", err)
+	}
+	return filepath.Join(homeDir, ".config", "huectl", "config.json"), nil
+}
+
 func Load(path string) (Config, error) {
 	cfg, err := loadFromFile(path)
 	if err != nil {
@@ -89,25 +97,58 @@ func LoadAndValidate(path string) (Config, error) {
 }
 
 func loadFromFile(path string) (Config, error) {
+	usedDefaultPath := false
 	if path == "" {
 		var err error
 		path, err = DefaultPath()
 		if err != nil {
 			return Config{}, err
 		}
+		usedDefaultPath = true
 	}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Config{}, nil
+	fallbackPath := ""
+	if usedDefaultPath {
+		legacyPath, err := legacyDefaultPath()
+		if err != nil {
+			return Config{}, err
 		}
-		return Config{}, fmt.Errorf("read config file %q: %w", path, err)
+		fallbackPath = legacyPath
+	}
+
+	content, loadedPath, err := readConfigFile(path, fallbackPath)
+	if err != nil {
+		return Config{}, err
+	}
+	if content == nil {
+		return Config{}, nil
 	}
 
 	var cfg Config
 	if err := json.Unmarshal(content, &cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config file %q: %w", path, err)
+		return Config{}, fmt.Errorf("parse config file %q: %w", loadedPath, err)
 	}
 	return cfg, nil
+}
+
+func readConfigFile(primaryPath, fallbackPath string) ([]byte, string, error) {
+	content, err := os.ReadFile(primaryPath)
+	if err == nil {
+		return content, primaryPath, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, "", fmt.Errorf("read config file %q: %w", primaryPath, err)
+	}
+
+	if fallbackPath != "" && fallbackPath != primaryPath {
+		fallbackContent, fallbackErr := os.ReadFile(fallbackPath)
+		if fallbackErr == nil {
+			return fallbackContent, fallbackPath, nil
+		}
+		if !errors.Is(fallbackErr, os.ErrNotExist) {
+			return nil, "", fmt.Errorf("read config file %q: %w", fallbackPath, fallbackErr)
+		}
+	}
+
+	return nil, "", nil
 }

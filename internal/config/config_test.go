@@ -102,6 +102,63 @@ func TestLoad_InvalidInsecureTLSEnv(t *testing.T) {
 	}
 }
 
+func TestReadConfigFile_UsesPrimaryWhenPresent(t *testing.T) {
+	dir := t.TempDir()
+	primary := filepath.Join(dir, "primary.json")
+	fallback := filepath.Join(dir, "fallback.json")
+	if err := os.WriteFile(primary, []byte(`{"bridge_host":"1.2.3.4"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(fallback, []byte(`{"bridge_host":"5.6.7.8"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	content, loadedPath, err := readConfigFile(primary, fallback)
+	if err != nil {
+		t.Fatalf("readConfigFile() error = %v", err)
+	}
+	if loadedPath != primary {
+		t.Fatalf("loadedPath = %q, want %q", loadedPath, primary)
+	}
+	if string(content) != `{"bridge_host":"1.2.3.4"}` {
+		t.Fatalf("content = %q", string(content))
+	}
+}
+
+func TestReadConfigFile_FallsBackWhenPrimaryMissing(t *testing.T) {
+	dir := t.TempDir()
+	primary := filepath.Join(dir, "missing.json")
+	fallback := filepath.Join(dir, "fallback.json")
+	if err := os.WriteFile(fallback, []byte(`{"bridge_host":"5.6.7.8"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	content, loadedPath, err := readConfigFile(primary, fallback)
+	if err != nil {
+		t.Fatalf("readConfigFile() error = %v", err)
+	}
+	if loadedPath != fallback {
+		t.Fatalf("loadedPath = %q, want %q", loadedPath, fallback)
+	}
+	if string(content) != `{"bridge_host":"5.6.7.8"}` {
+		t.Fatalf("content = %q", string(content))
+	}
+}
+
+func TestReadConfigFile_ReturnsNilWhenBothMissing(t *testing.T) {
+	dir := t.TempDir()
+	primary := filepath.Join(dir, "missing-primary.json")
+	fallback := filepath.Join(dir, "missing-fallback.json")
+
+	content, loadedPath, err := readConfigFile(primary, fallback)
+	if err != nil {
+		t.Fatalf("readConfigFile() error = %v", err)
+	}
+	if content != nil || loadedPath != "" {
+		t.Fatalf("expected empty result, got content=%q loadedPath=%q", string(content), loadedPath)
+	}
+}
+
 func TestConfigValidateErrors(t *testing.T) {
 	tests := []struct {
 		name string
