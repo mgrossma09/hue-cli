@@ -33,6 +33,7 @@ type App struct {
 	Stdout     io.Writer
 	Stderr     io.Writer
 	NewClient  func(cfg config.Config) lightService
+	GetToken   func(ctx context.Context, bridgeHost string) (string, error)
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -44,6 +45,9 @@ func (a App) Run(ctx context.Context, args []string) error {
 	if len(args) == 0 || isHelpArg(args[0]) {
 		printUsage(a.Stdout)
 		return nil
+	}
+	if args[0] == "get-token" {
+		return a.runGetToken(ctx, args[1:])
 	}
 
 	cfg, err := config.LoadAndValidate(a.ConfigPath)
@@ -66,6 +70,49 @@ func (a App) Run(ctx context.Context, args []string) error {
 		printUsage(a.Stderr)
 		return fmt.Errorf("%w: unknown command %q", ErrUsage, args[0])
 	}
+}
+
+func (a App) runGetToken(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("get-token", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	bridgeHost := fs.String("bridge-host", "", "Hue Bridge host or IP (required)")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printGetTokenUsage(a.Stdout)
+			return nil
+		}
+		return fmt.Errorf("%w: %v", ErrUsage, err)
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("%w: unexpected positional arguments", ErrUsage)
+	}
+	if strings.TrimSpace(*bridgeHost) == "" {
+		return fmt.Errorf("%w: --bridge-host is required", ErrUsage)
+	}
+
+	getToken := a.GetToken
+	if getToken == nil {
+		getToken = func(ctx context.Context, bridgeHost string) (string, error) {
+			return hue.GetToken(ctx, bridgeHost, nil)
+		}
+	}
+
+	token, err := getToken(ctx, *bridgeHost)
+	if err != nil {
+		if errors.Is(err, hue.ErrLinkButton) || errors.Is(err, hue.ErrNoToken) {
+			printBridgeButtonHint(a.Stderr)
+		}
+		return err
+	}
+	if strings.TrimSpace(token) == "" {
+		printBridgeButtonHint(a.Stderr)
+		return hue.ErrNoToken
+	}
+	if _, err := fmt.Fprintln(a.Stdout, token); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
 }
 
 func (a App) runLights(ctx context.Context, client lightService, args []string) error {
@@ -486,11 +533,28 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "huectl - control Philips Hue lights via Hue API v2")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl get-token --bridge-host <host>")
 	_, _ = fmt.Fprintln(w, "  huectl lights list")
 	_, _ = fmt.Fprintln(w, "  huectl lights toggle (--id <id> | --group <group> [--name <name>])")
 	_, _ = fmt.Fprintln(w, "  huectl lights set (--id <id> | --group <group> [--name <name>]) [--on|--off] [--bri <0-100>] [--ct <mireds>] [--xy <x,y>]")
+	_, _ = fmt.Fprintln(w)
+	printBridgeButtonHint(w)
 }
 
 func isHelpArg(arg string) bool {
 	return arg == "-h" || arg == "--help"
+}
+
+func printGetTokenUsage(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  huectl get-token --bridge-host <host>")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Options:")
+	_, _ = fmt.Fprintln(w, "  --bridge-host  Hue Bridge host or IP (required)")
+	_, _ = fmt.Fprintln(w)
+	printBridgeButtonHint(w)
+}
+
+func printBridgeButtonHint(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "Hint: press the Hue Bridge button, then run this command within 30 seconds.")
 }

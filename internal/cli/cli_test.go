@@ -683,3 +683,105 @@ func TestRunLightsSetBriRange(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestRunGetToken(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{
+		Stdout: stdout,
+		Stderr: stderr,
+		GetToken: func(ctx context.Context, bridgeHost string) (string, error) {
+			_ = ctx
+			if bridgeHost != "192.168.1.2" {
+				t.Fatalf("bridgeHost = %q", bridgeHost)
+			}
+			return "token-123", nil
+		},
+	}
+
+	err := app.Run(context.Background(), []string{"get-token", "--bridge-host", "192.168.1.2"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "token-123" {
+		t.Fatalf("stdout = %q, want token-123", got)
+	}
+	if got := strings.TrimSpace(stderr.String()); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+}
+
+func TestRunGetTokenRequiresBridgeHost(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{Stdout: stdout, Stderr: stderr}
+
+	err := app.Run(context.Background(), []string{"get-token"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrUsage) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestRunGetTokenHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{Stdout: stdout, Stderr: stderr}
+
+	err := app.Run(context.Background(), []string{"get-token", "--help"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "huectl get-token --bridge-host <host>") {
+		t.Fatalf("stdout missing usage, got %q", output)
+	}
+	if !strings.Contains(output, "press the Hue Bridge button") {
+		t.Fatalf("stdout missing hint, got %q", output)
+	}
+}
+
+func TestRunGetTokenLinkButtonHintOnNoToken(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{
+		Stdout: stdout,
+		Stderr: stderr,
+		GetToken: func(ctx context.Context, bridgeHost string) (string, error) {
+			_ = ctx
+			_ = bridgeHost
+			return "", hue.ErrNoToken
+		},
+	}
+
+	err := app.Run(context.Background(), []string{"get-token", "--bridge-host", "192.168.1.2"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, hue.ErrNoToken) {
+		t.Fatalf("error = %v", err)
+	}
+	if got := stderr.String(); !strings.Contains(got, "within 30 seconds") {
+		t.Fatalf("stderr missing hint, got %q", got)
+	}
+}
+
+func TestRunHelpIncludesGetTokenHint(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := App{Stdout: stdout, Stderr: stderr}
+
+	err := app.Run(context.Background(), []string{"--help"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "huectl get-token --bridge-host <host>") {
+		t.Fatalf("stdout missing get-token usage, got %q", output)
+	}
+	if !strings.Contains(output, "press the Hue Bridge button") {
+		t.Fatalf("stdout missing bridge button hint, got %q", output)
+	}
+}

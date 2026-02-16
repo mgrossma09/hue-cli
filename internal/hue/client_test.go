@@ -407,3 +407,54 @@ func TestUpdateLightNoFields(t *testing.T) {
 		t.Fatalf("UpdateLight() error = %v, want %v", err, ErrNoUpdateFields)
 	}
 }
+
+func TestGetToken(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %q", r.Method)
+		}
+		_, _ = io.WriteString(w, `[{"success":{"username":"token-abc"}}]`)
+	}))
+	defer server.Close()
+
+	token, err := GetToken(context.Background(), server.URL, server.Client())
+	if err != nil {
+		t.Fatalf("GetToken() error = %v", err)
+	}
+	if token != "token-abc" {
+		t.Fatalf("token = %q, want token-abc", token)
+	}
+}
+
+func TestGetTokenLinkButton(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `[{"error":{"type":101,"description":"link button not pressed"}}]`)
+	}))
+	defer server.Close()
+
+	_, err := GetToken(context.Background(), server.URL, server.Client())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err != ErrLinkButton {
+		t.Fatalf("error = %v, want %v", err, ErrLinkButton)
+	}
+}
+
+func TestGetTokenNoToken(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `[]`)
+	}))
+	defer server.Close()
+
+	_, err := GetToken(context.Background(), server.URL, server.Client())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if err != ErrNoToken {
+		t.Fatalf("error = %v, want %v", err, ErrNoToken)
+	}
+}

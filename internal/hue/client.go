@@ -23,6 +23,8 @@ var (
 	ErrNoUpdateFields = errors.New("no update fields provided")
 	ErrMissingID      = errors.New("light id is required")
 	ErrLightNotFound  = errors.New("light not found")
+	ErrNoToken        = errors.New("no token returned")
+	ErrLinkButton     = errors.New("link button not pressed")
 )
 
 type Client struct {
@@ -86,6 +88,16 @@ type lightResponse struct {
 
 type updateResponse struct {
 	Errors []apiErrorDetail `json:"errors"`
+}
+
+type createUserResponseEntry struct {
+	Success *struct {
+		Username string `json:"username"`
+	} `json:"success,omitempty"`
+	Error *struct {
+		Type        int    `json:"type"`
+		Description string `json:"description"`
+	} `json:"error,omitempty"`
 }
 
 type lightResource struct {
@@ -165,6 +177,64 @@ func NewClient(cfg config.Config, httpClient *http.Client) *Client {
 		BaseURL:    baseURL,
 		HTTPClient: httpClient,
 	}
+}
+
+func GetToken(ctx context.Context, bridgeHost string, httpClient *http.Client) (string, error) {
+	if strings.TrimSpace(bridgeHost) == "" {
+		return "", fmt.Errorf("bridge host is required")
+	}
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	httpClient = cloneWithInsecureTLS(httpClient)
+
+	reqBody, err := json.Marshal(map[string]string{"devicetype": "huectl#cli"})
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	baseURL := normalizeBaseURL(bridgeHost)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api", bytes.NewReader(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("hue api status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var entries []createUserResponseEntry
+	if err := json.Unmarshal(respBody, &entries); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.Success != nil && entry.Success.Username != "" {
+			return entry.Success.Username, nil
+		}
+		if entry.Error != nil {
+			if entry.Error.Type == 101 {
+				return "", ErrLinkButton
+			}
+			if entry.Error.Description != "" {
+				return "", fmt.Errorf("hue api error: %s", entry.Error.Description)
+			}
+			return "", fmt.Errorf("hue api error type %d", entry.Error.Type)
+		}
+	}
+	return "", ErrNoToken
 }
 
 func (c *Client) ListLights(ctx context.Context) ([]Light, error) {
