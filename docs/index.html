@@ -61,6 +61,10 @@
               <h3>Cross-Platform</h3>
               <p>Prebuilt binaries for macOS and Linux on amd64 and arm64.</p>
             </article>
+            <article class="card">
+              <h3>MCP Server</h3>
+              <p>Control lights from Claude Code or Claude Desktop via the <code>hue-mcp</code> MCP server — no subprocess, no duplication.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -136,7 +140,44 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
         </div>
       </section>
 
-      <section class="section" id="releases">
+      <section class="section" id="mcp">
+        <div class="container">
+          <h2>MCP Server</h2>
+          <p class="muted">
+            <code>hue-mcp</code> exposes your lights as tools for
+            <a href="https://claude.ai/code" target="_blank" rel="noreferrer">Claude Code</a> and
+            <a href="https://claude.ai/download" target="_blank" rel="noreferrer">Claude Desktop</a>
+            via the <a href="https://modelcontextprotocol.io/" target="_blank" rel="noreferrer">Model Context Protocol</a>.
+            It reuses the same config as <code>huectl</code> — no extra setup.
+          </p>
+          <div class="grid code-grid">
+            <article class="card">
+              <h3>Tools</h3>
+              <ul>
+                <li><code>list_lights</code> — list lights, optional group filter</li>
+                <li><code>list_rooms</code> — list all room/zone names</li>
+                <li><code>toggle_light</code> — toggle by id or group</li>
+                <li><code>set_light</code> — set on, brightness, color temp</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Build &amp; Register</h3>
+              <pre><code>make build-mcp
+# ./bin/hue-mcp</code></pre>
+              <pre><code># .mcp.json / claude_desktop_config.json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "/path/to/hue-mcp"
+    }
+  }
+}</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="releases">
         <div class="container">
           <h2>Releases</h2>
           <p class="muted">Latest published releases from GitHub.</p>
@@ -152,6 +193,7 @@ huectl lights toggle --id 01234567-89ab-cdef-0123-456789abcdef</code></pre>
         <span>huectl</span>
         <nav>
           <a href="https://github.com/mgrossma09/hue-cli" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="#mcp">MCP</a>
           <a href="https://github.com/mgrossma09/hue-cli/issues" target="_blank" rel="noreferrer">Issues</a>
           <a href="https://github.com/mgrossma09/hue-cli/releases" target="_blank" rel="noreferrer">Releases</a>
         </nav>

@@ -219,6 +219,72 @@ Notes:
 - `--group <name>` filters list output by group/room name (case-insensitive exact match) and implies `--with-group`.
 - If a light appears in multiple groups, `huectl` picks the first group deterministically (sorted by group type then ID).
 
+## MCP Server (hue-mcp)
+
+`hue-mcp` is an [MCP](https://modelcontextprotocol.io/) server that exposes your Hue lights as tools for Claude Code, Claude Desktop, or any MCP-compatible client. It reuses the same config as `huectl` — no extra setup required.
+
+### Build
+
+```bash
+make build-mcp
+# binary: ./bin/hue-mcp
+```
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_lights` | List all lights; optional `group` filter |
+| `list_rooms` | List all unique room/zone names |
+| `toggle_light` | Toggle a light by `id`, or by `group` + optional `name` |
+| `set_light` | Set `on`, `brightness` (0–100), or `color_temp` (mirek) by `id` or `group` |
+
+### Claude Code integration
+
+Add to your Claude Code MCP settings (`~/.claude.json` or project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "/path/to/hue-mcp"
+    }
+  }
+}
+```
+
+If you prefer to pass credentials via environment variables instead of the config file:
+
+```json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "/path/to/hue-mcp",
+      "env": {
+        "HUE_BRIDGE_HOST": "192.168.1.2",
+        "HUE_API_TOKEN": "your-token"
+      }
+    }
+  }
+}
+```
+
+`hue-mcp` uses the same `HUE_BRIDGE_HOST`, `HUE_API_TOKEN`, and `HUE_INSECURE_TLS` env vars and config file as `huectl`. See [Configuration](#configuration).
+
+### Claude Desktop integration
+
+In `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "hue": {
+      "command": "/path/to/hue-mcp"
+    }
+  }
+}
+```
+
 ## Development
 
 ```bash
@@ -231,6 +297,7 @@ make fmt
 Binary output:
 
 - `./bin/huectl`
+- `./bin/hue-mcp` (via `make build-mcp`)
 
 ### pre-commit
 
